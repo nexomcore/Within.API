@@ -24,6 +24,7 @@ public sealed class WithinDbContext(DbContextOptions<WithinDbContext> options) :
     public DbSet<DailyCheckIn> DailyCheckIns => Set<DailyCheckIn>();
     public DbSet<MonthlyProfile> MonthlyProfiles => Set<MonthlyProfile>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<MarketFitSubmission> MarketFitSubmissions => Set<MarketFitSubmission>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -56,6 +57,22 @@ public sealed class WithinDbContext(DbContextOptions<WithinDbContext> options) :
             entity.HasIndex(item => new { item.Lens, item.StartUtc });
             entity.HasIndex(item => item.ProviderId);
             entity.Property(item => item.Tags).HasColumnType("text[]");
+        });
+
+        modelBuilder.Entity<DailyCheckIn>(entity =>
+        {
+            entity.HasIndex(item => new { item.UserId, item.CheckInDate }).IsUnique();
+            entity.Property(item => item.Tags).HasColumnType("text[]");
+        });
+
+        modelBuilder.Entity<MarketFitSubmission>(entity =>
+        {
+            entity.HasIndex(item => new { item.Audience, item.CreatedUtc });
+            entity.Property(item => item.Audience).HasMaxLength(40);
+            entity.Property(item => item.Name).HasMaxLength(180);
+            entity.Property(item => item.Contact).HasMaxLength(320);
+            entity.Property(item => item.Source).HasMaxLength(120);
+            entity.Property(item => item.AnswersJson).HasColumnType("jsonb");
         });
 
         modelBuilder.Entity<EventRegistration>()

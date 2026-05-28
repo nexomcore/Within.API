@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using WithinAPI.Data;
@@ -11,9 +12,11 @@ using WithinAPI.Data;
 namespace WithinAPI.Data.Migrations
 {
     [DbContext(typeof(WithinDbContext))]
-    partial class WithinDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260527135518_PendingModelDiagnostic")]
+    partial class PendingModelDiagnostic
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -347,46 +350,6 @@ namespace WithinAPI.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("EventRegistrations", "within");
-                });
-
-            modelBuilder.Entity("WithinAPI.Domain.MarketFitSubmission", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AnswersJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("Audience")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<string>("Contact")
-                        .IsRequired()
-                        .HasMaxLength(320)
-                        .HasColumnType("character varying(320)");
-
-                    b.Property<DateTimeOffset>("CreatedUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(180)
-                        .HasColumnType("character varying(180)");
-
-                    b.Property<string>("Source")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Audience", "CreatedUtc");
-
-                    b.ToTable("MarketFitSubmissions", "within");
                 });
 
             modelBuilder.Entity("WithinAPI.Domain.MonthlyProfile", b =>

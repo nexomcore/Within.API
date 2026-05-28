@@ -233,6 +233,7 @@ public sealed class DailyCheckIn
     public int StressScore { get; set; }
     public int ConnectionScore { get; set; }
     public int MeaningScore { get; set; }
+    public string[] Tags { get; set; } = [];
     public string? Note { get; set; }
     public int DailyBalanceScore { get; set; }
 }
@@ -248,4 +249,15 @@ public sealed class MonthlyProfile
     public int SeekScorePercent { get; set; }
     public int HolisticProfileScore { get; set; }
     public string? ReflectionNote { get; set; }
+}
+
+public sealed class MarketFitSubmission
+{
+    public Guid Id { get; set; }
+    public string Audience { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Contact { get; set; } = "";
+    public string Source { get; set; } = "";
+    public string AnswersJson { get; set; } = "{}";
+    public DateTimeOffset CreatedUtc { get; set; }
 }

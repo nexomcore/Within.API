@@ -1,4 +1,5 @@
 using WithinAPI.Domain;
+using System.Text.Json;
 
 namespace WithinAPI.Models;
 
@@ -125,3 +126,43 @@ public sealed record HomeDashboardDto(
     CommunityDto[] CommunityPulse,
     string DailyMotivation,
     EventDto[] UpcomingJoinedEvents);
+
+public sealed record MarketFitSubmissionDto(
+    string Audience,
+    string Name,
+    string Contact,
+    string Source,
+    JsonElement Answers);
+
+public sealed record MarketFitSubmissionResponseDto(
+    Guid Id,
+    string Audience,
+    string Name,
+    string Contact,
+    string Source,
+    DateTimeOffset CreatedUtc);
+
+public sealed record AdminSubmissionDto(
+    Guid Id,
+    string Audience,
+    string Name,
+    string Contact,
+    string Source,
+    JsonElement Answers,
+    DateTimeOffset CreatedUtc);
+
+public sealed record AdminStatsDto(
+    int TotalSubmissions,
+    int UserSubmissions,
+    int ProviderSubmissions,
+    int TotalUsers,
+    int ProviderUsers,
+    int AdminUsers,
+    DateTimeOffset? LatestSubmissionUtc);
+
+public sealed record AdminUserDto(
+    Guid Id,
+    string DisplayName,
+    string Email,
+    WithinRole Role,
+    DateTimeOffset CreatedUtc);
