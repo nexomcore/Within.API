@@ -18,7 +18,8 @@ public enum EventJoinState
 {
     Interested,
     Going,
-    Attended
+    Attended,
+    Declined
 }
 
 public enum EventStatus
@@ -228,6 +229,7 @@ public sealed class Comment
     public Guid Id { get; set; }
     public Guid? PostId { get; set; }
     public Guid? EventId { get; set; }
+    public Guid? ParentCommentId { get; set; }
     public Guid AuthorUserId { get; set; }
     public string Body { get; set; } = "";
     public bool IsHidden { get; set; }

@@ -110,7 +110,26 @@ public static class EventEndpoints
         events.MapPost("/{id:guid}/comments", async (Guid id, UpsertCommentDto request, WithinDbContext db, ClaimsPrincipal principal) =>
         {
             if (!await db.Events.AnyAsync(item => item.Id == id)) return Results.NotFound();
-            var comment = new Comment { Id = Guid.NewGuid(), EventId = id, AuthorUserId = principal.UserId(), Body = request.Body.Trim(), CreatedUtc = DateTimeOffset.UtcNow };
+
+            var body = request.Body.Trim();
+            if (string.IsNullOrWhiteSpace(body)) return Results.BadRequest(new { message = "Comment body is required." });
+
+            if (request.ParentCommentId is not null)
+            {
+                var parent = await db.Comments.FirstOrDefaultAsync(item => item.Id == request.ParentCommentId && item.EventId == id && !item.IsHidden);
+                if (parent is null) return Results.BadRequest(new { message = "Parent comment was not found for this event." });
+                if (parent.ParentCommentId is not null) return Results.BadRequest(new { message = "Replies can only be added to top-level comments." });
+            }
+
+            var comment = new Comment
+            {
+                Id = Guid.NewGuid(),
+                EventId = id,
+                ParentCommentId = request.ParentCommentId,
+                AuthorUserId = principal.UserId(),
+                Body = body,
+                CreatedUtc = DateTimeOffset.UtcNow
+            };
             db.Comments.Add(comment);
             await db.SaveChangesAsync();
             var dto = await ApiMapping.ProjectComments(db.Comments.Where(item => item.Id == comment.Id), db).FirstAsync();

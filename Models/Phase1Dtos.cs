@@ -133,6 +133,23 @@ public sealed record EventDto(
     EventStatus Status,
     string[] Tags);
 
+public sealed record ProviderEventEngagementDto(
+    Guid EventId,
+    string EventTitle,
+    int GoingCount,
+    int InterestedCount,
+    int DeclinedCount,
+    int SavedCount,
+    ProviderEventParticipantDto[] Going,
+    ProviderEventParticipantDto[] Interested,
+    ProviderEventParticipantDto[] Declined,
+    ProviderEventParticipantDto[] Saved);
+
+public sealed record ProviderEventParticipantDto(
+    Guid UserId,
+    string DisplayName,
+    DateTimeOffset UpdatedUtc);
+
 public sealed record EventFilterDto(
     WithinLens? Lens,
     bool? Free,
@@ -182,9 +199,9 @@ public sealed record PostDto(
     int CommentCount,
     DateTimeOffset CreatedUtc);
 
-public sealed record CommentDto(Guid Id, string AuthorName, string Body, DateTimeOffset CreatedUtc);
+public sealed record CommentDto(Guid Id, Guid? ParentCommentId, string AuthorName, string Body, DateTimeOffset CreatedUtc);
 
-public sealed record UpsertCommentDto(string Body);
+public sealed record UpsertCommentDto(string Body, Guid? ParentCommentId = null);
 
 public sealed record ReviewDto(Guid Id, string AuthorName, int Rating, string Body, DateTimeOffset CreatedUtc);
 

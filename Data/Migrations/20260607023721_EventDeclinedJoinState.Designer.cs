@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using WithinAPI.Data;
@@ -11,9 +12,11 @@ using WithinAPI.Data;
 namespace WithinAPI.Data.Migrations
 {
     [DbContext(typeof(WithinDbContext))]
-    partial class WithinDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260607023721_EventDeclinedJoinState")]
+    partial class EventDeclinedJoinState
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -53,15 +56,10 @@ namespace WithinAPI.Data.Migrations
                     b.Property<bool>("IsHidden")
                         .HasColumnType("boolean");
 
-                    b.Property<Guid?>("ParentCommentId")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid?>("PostId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ParentCommentId");
 
                     b.ToTable("Comments", "within");
                 });

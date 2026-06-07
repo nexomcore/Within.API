@@ -84,6 +84,11 @@ public sealed class WithinDbContext(DbContextOptions<WithinDbContext> options) :
             entity.Property(item => item.Tags).HasColumnType("text[]");
         });
 
+        modelBuilder.Entity<Comment>(entity =>
+        {
+            entity.HasIndex(item => item.ParentCommentId);
+        });
+
         modelBuilder.Entity<DailyCheckIn>(entity =>
         {
             entity.HasIndex(item => new { item.UserId, item.CheckInDate }).IsUnique();

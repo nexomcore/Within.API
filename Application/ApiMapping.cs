@@ -171,5 +171,5 @@ public static class ApiMapping
         from comment in query
         join user in db.Users on comment.AuthorUserId equals user.Id
         orderby comment.CreatedUtc
-        select new CommentDto(comment.Id, user.DisplayName, comment.Body, comment.CreatedUtc);
+        select new CommentDto(comment.Id, comment.ParentCommentId, user.DisplayName, comment.Body, comment.CreatedUtc);
 }
