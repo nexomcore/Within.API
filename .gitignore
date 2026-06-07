@@ -4,6 +4,7 @@ obj/
 .vscode/
 *.user
 *.suo
+*.log
 appsettings.Local.json
 .keys/
 /infra/bootstrap.ps1
