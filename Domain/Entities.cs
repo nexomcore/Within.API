@@ -42,7 +42,34 @@ public enum NotificationKind
     EventReminder2h,
     EventUpdated,
     CommunitySummary,
-    ProviderNewEvent
+    ProviderNewEvent,
+    FriendRequestReceived,
+    FriendRequestAccepted,
+    EventInvite,
+    PublicFriendRsvp,
+    CircleThreadReply,
+    CommentReply,
+    UserMention,
+    EventReminder,
+    CircleJoinRequest
+}
+
+public enum NotificationTargetType
+{
+    Event,
+    Circle,
+    CircleThread,
+    CommunityPost,
+    Profile,
+    Connection,
+    Comment
+}
+
+public enum NotificationMuteTargetType
+{
+    Circle,
+    Event,
+    User
 }
 
 public enum ProviderApplicationStatus
@@ -124,13 +151,30 @@ public enum CircleMemberStatus
 {
     Active,
     Left,
-    Removed
+    Removed,
+    Pending,
+    Rejected,
+    Blocked
 }
 
 public enum CircleRoleKind
 {
     Moderator,
     Admin
+}
+
+public enum CircleMemberRole
+{
+    Admin,
+    Moderator,
+    Member
+}
+
+public enum CircleJoinRequestStatus
+{
+    Pending,
+    Approved,
+    Rejected
 }
 
 public enum CircleEventStatus
@@ -242,6 +286,29 @@ public enum UserReportReason
     Impersonation,
     PrivacyConcern,
     Other
+}
+
+// API-facing only: identifies the surface a displayed identity was clicked from.
+// Not persisted, so it is intentionally absent from the Postgres enum registration.
+public enum ProfileContextType
+{
+    EventAttendee,
+    EventFriendGoing,
+    EventComment,
+    CircleMember,
+    CirclePost,
+    CircleComment
+}
+
+// The viewer-relative connection state shown on a profile preview (spec §8.2).
+// Distinct from the persisted ConnectionStatus.
+public enum ProfileConnectionState
+{
+    None,
+    PendingSent,
+    PendingReceived,
+    Connected,
+    Blocked
 }
 
 public sealed class User
@@ -508,6 +575,7 @@ public sealed class Circle
     public string Name { get; set; } = "";
     public string Slug { get; set; } = "";
     public string Description { get; set; } = "";
+    public Guid CreatedByUserId { get; set; }
     public CircleType Type { get; set; } = CircleType.Platform;
     public CircleVisibility Visibility { get; set; } = CircleVisibility.Public;
     public CircleStatus Status { get; set; } = CircleStatus.Active;
@@ -527,12 +595,24 @@ public sealed class CircleMember
     public Guid Id { get; set; }
     public Guid CircleId { get; set; }
     public Guid UserId { get; set; }
+    public CircleMemberRole Role { get; set; } = CircleMemberRole.Member;
     public CircleMemberStatus Status { get; set; } = CircleMemberStatus.Active;
     public CircleIdentityMode IdentityMode { get; set; } = CircleIdentityMode.RealProfile;
     public string? DisplayNameOverride { get; set; }
     public DateTimeOffset JoinedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? LeftAt { get; set; }
+}
+
+public sealed class CircleJoinRequest
+{
+    public Guid Id { get; set; }
+    public Guid CircleId { get; set; }
+    public Guid UserId { get; set; }
+    public CircleJoinRequestStatus Status { get; set; } = CircleJoinRequestStatus.Pending;
+    public DateTimeOffset RequestedAt { get; set; }
+    public Guid? ReviewedByUserId { get; set; }
+    public DateTimeOffset? ReviewedAt { get; set; }
 }
 
 public sealed class CircleRole
@@ -618,6 +698,17 @@ public sealed class CircleGuideline
     public bool IsActive { get; set; } = true;
 }
 
+public sealed class CircleAnnouncement
+{
+    public Guid Id { get; set; }
+    public Guid CircleId { get; set; }
+    public Guid AuthorUserId { get; set; }
+    public string Body { get; set; } = "";
+    public bool IsPinned { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 public sealed class Connection
 {
     public Guid Id { get; set; }
@@ -699,7 +790,23 @@ public sealed class NotificationPreference
     public bool EventRemindersEnabled { get; set; } = true;
     public bool CommunitySummariesEnabled { get; set; } = true;
     public bool ProviderNewEventsEnabled { get; set; } = true;
+    public bool FriendRequestsEnabled { get; set; } = true;
+    public bool EventInvitesEnabled { get; set; } = true;
+    public bool FriendActivityEnabled { get; set; } = true;
+    public bool CircleRepliesEnabled { get; set; } = true;
+    public bool CommentRepliesEnabled { get; set; } = true;
+    public bool MentionsEnabled { get; set; } = true;
     public WithinLens PreferredLens { get; set; } = WithinLens.Feel;
+}
+
+public sealed class PushToken
+{
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    public string Token { get; set; } = "";
+    public string Platform { get; set; } = "";
+    public DateTimeOffset CreatedUtc { get; set; }
+    public DateTimeOffset UpdatedUtc { get; set; }
 }
 
 public sealed class DeviceToken
@@ -708,6 +815,33 @@ public sealed class DeviceToken
     public Guid UserId { get; set; }
     public string Token { get; set; } = "";
     public string Platform { get; set; } = "";
+    public DateTimeOffset CreatedUtc { get; set; }
+}
+
+public sealed class Notification
+{
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    public Guid? ActorUserId { get; set; }
+    public NotificationKind Kind { get; set; }
+    public string Title { get; set; } = "";
+    public string Body { get; set; } = "";
+    public NotificationTargetType? TargetType { get; set; }
+    public Guid? TargetId { get; set; }
+    public Guid? CircleId { get; set; }
+    public Guid? EventId { get; set; }
+    public Guid? RelatedUserId { get; set; }
+    public bool IsRead { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
+    public DateTimeOffset? ReadUtc { get; set; }
+}
+
+public sealed class NotificationMute
+{
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    public NotificationMuteTargetType TargetType { get; set; }
+    public Guid TargetId { get; set; }
     public DateTimeOffset CreatedUtc { get; set; }
 }
 

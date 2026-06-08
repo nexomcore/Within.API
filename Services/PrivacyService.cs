@@ -1,10 +1,16 @@
 using Microsoft.EntityFrameworkCore;
 using WithinAPI.Data;
 using WithinAPI.Domain;
+using WithinAPI.Models;
 
 namespace WithinAPI.Services;
 
-public sealed record DisplayIdentity(string DisplayName, bool ProfileLinkAllowed, CircleIdentityMode IdentityMode);
+/// <summary>Result of resolving a context-referenced display identity to its real target.</summary>
+public sealed record ContextResolution(
+    Guid TargetUserId,
+    DisplayIdentity Identity,
+    bool SharesCircleOrEventWithViewer,
+    bool SharesCircleWithViewer);
 
 public sealed class PrivacyService(WithinDbContext db)
 {
@@ -83,16 +89,13 @@ public sealed class PrivacyService(WithinDbContext db)
         if (viewerUserId == rsvp.UserId) return true;
         var provider = await db.Providers.FindAsync(evt.ProviderId);
         var viewer = await db.Users.FindAsync(viewerUserId);
-        if (viewer?.Role == WithinRole.Admin || provider?.OwnerUserId == viewerUserId) return true;
+        var isPrivileged = viewer?.Role == WithinRole.Admin || provider?.OwnerUserId == viewerUserId;
 
-        return rsvp.Visibility switch
-        {
-            RsvpVisibility.Public => true,
-            RsvpVisibility.FriendsOnly => await AreConnected(viewerUserId, rsvp.UserId),
-            RsvpVisibility.CircleMembersOnly => await ShareEventCircle(viewerUserId, rsvp.UserId, evt.Id),
-            RsvpVisibility.Private => false,
-            _ => false
-        };
+        return ProfileAccessRules.CanViewRsvp(
+            isPrivileged,
+            rsvp.Visibility,
+            await AreConnected(viewerUserId, rsvp.UserId),
+            await ShareEventCircle(viewerUserId, rsvp.UserId, evt.Id));
     }
 
     public async Task<bool> ShareEventCircle(Guid viewerUserId, Guid attendeeUserId, Guid eventId) =>
@@ -136,38 +139,224 @@ public sealed class PrivacyService(WithinDbContext db)
         var isMember = await IsCircleMember(circleId, viewerUserId);
         var isModerator = await db.CircleRoles.AnyAsync(item => item.CircleId == circleId && item.UserId == viewerUserId);
         var viewer = await db.Users.FindAsync(viewerUserId);
-        if (viewer?.Role == WithinRole.Admin || isModerator) return true;
+        var isPrivileged = viewer?.Role == WithinRole.Admin || isModerator;
 
-        return circle.MemberListVisibility switch
-        {
-            MemberListVisibility.Public => true,
-            MemberListVisibility.MembersOnly => isMember,
-            MemberListVisibility.AdminsOnly => false,
-            MemberListVisibility.Hidden => false,
-            _ => false
-        };
+        return ProfileAccessRules.CanViewCircleMember(isPrivileged, circle.MemberListVisibility, isMember);
     }
 
     public async Task<DisplayIdentity> GetDisplayIdentityForCircle(Guid? viewerUserId, Guid circleId, Guid targetUserId)
     {
         var user = await db.Users.FindAsync(targetUserId);
-        var member = await db.CircleMembers.FirstOrDefaultAsync(item => item.CircleId == circleId && item.UserId == targetUserId);
         if (user is null) return new DisplayIdentity("Circle Member", false, CircleIdentityMode.HiddenProfile);
-        if (member is null || member.IdentityMode == CircleIdentityMode.RealProfile)
-        {
-            return new DisplayIdentity(user.DisplayName, true, CircleIdentityMode.RealProfile);
-        }
+        var member = await db.CircleMembers.FirstOrDefaultAsync(item => item.CircleId == circleId && item.UserId == targetUserId);
+        return ProfileAccessRules.ResolveCircleIdentity(
+            user.DisplayName,
+            member?.IdentityMode,
+            member?.DisplayNameOverride,
+            viewerUserId == targetUserId);
+    }
 
-        if (viewerUserId == targetUserId)
-        {
-            return new DisplayIdentity(member.DisplayNameOverride ?? user.DisplayName, true, member.IdentityMode);
-        }
+    // ---- Profile Preview context resolution (spec §8) ----
 
-        return member.IdentityMode switch
+    /// <summary>
+    /// Resolves a clicked display identity (referenced safely by context) to its real user
+    /// and circle-safe display identity, after enforcing the context's visibility gate.
+    /// Returns null when the viewer may not see the identity, so callers expose nothing.
+    /// </summary>
+    public async Task<ContextResolution?> ResolveContextProfile(
+        Guid? viewerUserId, ProfileContextType contextType, Guid contextId, Guid targetContextProfileId)
+    {
+        // Every Profile Preview surface requires an authenticated viewer.
+        if (viewerUserId is null) return null;
+        var viewer = viewerUserId.Value;
+
+        switch (contextType)
         {
-            CircleIdentityMode.Pseudonym => new DisplayIdentity(member.DisplayNameOverride ?? "Circle Member", false, CircleIdentityMode.Pseudonym),
-            CircleIdentityMode.HiddenProfile => new DisplayIdentity("Circle Member", false, CircleIdentityMode.HiddenProfile),
-            _ => new DisplayIdentity(user.DisplayName, true, CircleIdentityMode.RealProfile)
-        };
+            case ProfileContextType.EventAttendee:
+            case ProfileContextType.EventFriendGoing:
+            {
+                var evt = await db.Events.FindAsync(contextId);
+                if (evt is null) return null;
+                var targetUserId = targetContextProfileId; // attendees are referenced by real userId
+                var registration = await db.EventRegistrations.FirstOrDefaultAsync(item =>
+                    item.EventId == contextId && item.UserId == targetUserId && item.State != EventJoinState.Declined);
+                if (registration is null) return null;
+                if (!await CanViewEventRsvp(viewer, evt, registration)) return null;
+                if (contextType == ProfileContextType.EventFriendGoing
+                    && viewer != targetUserId
+                    && !await AreConnected(viewer, targetUserId))
+                {
+                    return null;
+                }
+                var user = await db.Users.FindAsync(targetUserId);
+                if (user is null) return null;
+                return await BuildResolution(viewer, targetUserId, new DisplayIdentity(user.DisplayName, true, CircleIdentityMode.RealProfile));
+            }
+
+            case ProfileContextType.EventComment:
+            {
+                var comment = await db.Comments.FirstOrDefaultAsync(item =>
+                    item.Id == targetContextProfileId && item.EventId == contextId && !item.IsHidden);
+                if (comment is null) return null;
+                var user = await db.Users.FindAsync(comment.AuthorUserId);
+                if (user is null) return null;
+                return await BuildResolution(viewer, comment.AuthorUserId, new DisplayIdentity(user.DisplayName, true, CircleIdentityMode.RealProfile));
+            }
+
+            case ProfileContextType.CircleMember:
+            {
+                var member = await db.CircleMembers.FirstOrDefaultAsync(item =>
+                    item.Id == targetContextProfileId && item.CircleId == contextId && item.Status == CircleMemberStatus.Active);
+                if (member is null) return null;
+                if (!await CanViewCircleMember(viewer, contextId, member.UserId)) return null;
+                var identity = await GetDisplayIdentityForCircle(viewer, contextId, member.UserId);
+                return await BuildResolution(viewer, member.UserId, identity);
+            }
+
+            case ProfileContextType.CirclePost:
+            {
+                var thread = await db.CircleThreads.FirstOrDefaultAsync(item =>
+                    item.Id == targetContextProfileId && item.CircleId == contextId && item.Status != CommunityContentStatus.Hidden);
+                if (thread is null) return null;
+                if (!await CanViewCircleMember(viewer, contextId, thread.UserId) && !await IsCircleMember(contextId, viewer)) return null;
+                var identity = await GetDisplayIdentityForCircle(viewer, contextId, thread.UserId);
+                return await BuildResolution(viewer, thread.UserId, identity);
+            }
+
+            case ProfileContextType.CircleComment:
+            {
+                var comment = await db.CircleThreadComments.FirstOrDefaultAsync(item =>
+                    item.Id == targetContextProfileId && item.Status != CommunityContentStatus.Hidden);
+                if (comment is null) return null;
+                var thread = await db.CircleThreads.FindAsync(comment.ThreadId);
+                if (thread is null || thread.CircleId != contextId) return null;
+                if (!await CanViewCircleMember(viewer, contextId, comment.UserId) && !await IsCircleMember(contextId, viewer)) return null;
+                var identity = await GetDisplayIdentityForCircle(viewer, contextId, comment.UserId);
+                return await BuildResolution(viewer, comment.UserId, identity);
+            }
+
+            default:
+                return null;
+        }
+    }
+
+    private async Task<ContextResolution> BuildResolution(Guid viewerUserId, Guid targetUserId, DisplayIdentity identity)
+    {
+        var sharesCircle = await ShareCircle(viewerUserId, targetUserId);
+        var sharesEvent = await ShareVisibleEvent(viewerUserId, targetUserId);
+        return new ContextResolution(targetUserId, identity, sharesCircle || sharesEvent, sharesCircle);
+    }
+
+    private async Task<Connection?> FindConnection(Guid firstUserId, Guid secondUserId) =>
+        await db.Connections.FirstOrDefaultAsync(item =>
+            (item.RequesterUserId == firstUserId && item.ReceiverUserId == secondUserId) ||
+            (item.RequesterUserId == secondUserId && item.ReceiverUserId == firstUserId));
+
+    public async Task<(ProfileConnectionState State, Guid? ConnectionId)> GetConnectionState(Guid viewerUserId, Guid targetUserId) =>
+        ProfileAccessRules.ConnectionState(await FindConnection(viewerUserId, targetUserId), viewerUserId);
+
+    private async Task<bool> CanViewFullProfileFor(Guid viewerUserId, ContextResolution resolution)
+    {
+        var settings = await GetOrCreateSettings(resolution.TargetUserId);
+        return ProfileAccessRules.CanViewFullProfile(
+            viewerUserId == resolution.TargetUserId,
+            settings.ProfileVisibility,
+            await AreConnected(viewerUserId, resolution.TargetUserId),
+            resolution.SharesCircleWithViewer,
+            resolution.Identity.IdentityMode);
+    }
+
+    private async Task<bool> CanRequestConnectionFor(Guid viewerUserId, ContextResolution resolution)
+    {
+        var (state, _) = await GetConnectionState(viewerUserId, resolution.TargetUserId);
+        var settings = await GetOrCreateSettings(resolution.TargetUserId);
+        return ProfileAccessRules.CanRequestConnection(
+            viewerUserId == resolution.TargetUserId,
+            await IsBlocked(viewerUserId, resolution.TargetUserId),
+            state,
+            settings.FriendRequestPermission,
+            resolution.SharesCircleOrEventWithViewer,
+            resolution.Identity.IdentityMode);
+    }
+
+    public async Task<bool> CanOpenProfileFromContext(Guid viewerUserId, ProfileContextType contextType, Guid contextId, Guid targetContextProfileId)
+    {
+        var resolution = await ResolveContextProfile(viewerUserId, contextType, contextId, targetContextProfileId);
+        return resolution is not null && await CanViewFullProfileFor(viewerUserId, resolution);
+    }
+
+    public async Task<bool> CanRequestConnectionFromContext(Guid viewerUserId, ProfileContextType contextType, Guid contextId, Guid targetContextProfileId)
+    {
+        var resolution = await ResolveContextProfile(viewerUserId, contextType, contextId, targetContextProfileId);
+        return resolution is not null && await CanRequestConnectionFor(viewerUserId, resolution);
+    }
+
+    /// <summary>The privacy-safe identity for a context, or null if the viewer may not see it.</summary>
+    public async Task<DisplayIdentityDto?> GetDisplayIdentityForContext(
+        Guid? viewerUserId, ProfileContextType contextType, Guid contextId, Guid targetContextProfileId)
+    {
+        var resolution = await ResolveContextProfile(viewerUserId, contextType, contextId, targetContextProfileId);
+        return resolution is null
+            ? null
+            : new DisplayIdentityDto(resolution.Identity.DisplayName, resolution.Identity.IdentityMode, true, resolution.Identity.ProfileLinkAllowed);
+    }
+
+    /// <summary>Builds the full Profile Preview card for a clicked identity (spec §8.2, §8.3).</summary>
+    public async Task<ProfilePreviewDto?> GetDisplayProfileCard(
+        Guid viewerUserId, ProfileContextType contextType, Guid contextId, Guid targetContextProfileId)
+    {
+        var resolution = await ResolveContextProfile(viewerUserId, contextType, contextId, targetContextProfileId);
+        if (resolution is null) return null;
+
+        var isSelf = viewerUserId == resolution.TargetUserId;
+        var (state, connectionId) = await GetConnectionState(viewerUserId, resolution.TargetUserId);
+        var isReal = resolution.Identity.IdentityMode == CircleIdentityMode.RealProfile;
+
+        var sharedSummary = isReal && !isSelf
+            ? await BuildSharedContextSummary(viewerUserId, resolution.TargetUserId)
+            : null;
+
+        return new ProfilePreviewDto(
+            DisplayName: resolution.Identity.DisplayName,
+            AvatarUrl: null,
+            BioPreview: null,
+            LocationPreview: null,
+            SharedContextSummary: sharedSummary,
+            IdentityMode: resolution.Identity.IdentityMode,
+            CanViewFullProfile: await CanViewFullProfileFor(viewerUserId, resolution),
+            CanRequestConnection: await CanRequestConnectionFor(viewerUserId, resolution),
+            ConnectionStatus: state,
+            CanReport: !isSelf,
+            CanBlock: !isSelf,
+            SafeProfileRoute: null,
+            ConnectionId: connectionId);
+    }
+
+    private async Task<string?> BuildSharedContextSummary(Guid viewerUserId, Guid targetUserId)
+    {
+        var sharedCircles = await (
+            from viewerMembership in db.CircleMembers
+            join targetMembership in db.CircleMembers on viewerMembership.CircleId equals targetMembership.CircleId
+            where viewerMembership.UserId == viewerUserId &&
+                  targetMembership.UserId == targetUserId &&
+                  viewerMembership.Status == CircleMemberStatus.Active &&
+                  targetMembership.Status == CircleMemberStatus.Active
+            select viewerMembership.CircleId).Distinct().CountAsync();
+
+        var sharedEvents = await (
+            from viewerReg in db.EventRegistrations
+            join targetReg in db.EventRegistrations on viewerReg.EventId equals targetReg.EventId
+            where viewerReg.UserId == viewerUserId &&
+                  targetReg.UserId == targetUserId &&
+                  viewerReg.State != EventJoinState.Declined &&
+                  targetReg.State != EventJoinState.Declined
+            select viewerReg.EventId).Distinct().CountAsync();
+
+        if (sharedCircles == 0 && sharedEvents == 0) return null;
+
+        var parts = new List<string>();
+        if (sharedEvents > 0) parts.Add($"{sharedEvents} event{(sharedEvents == 1 ? "" : "s")}");
+        if (sharedCircles > 0) parts.Add($"{sharedCircles} circle{(sharedCircles == 1 ? "" : "s")}");
+        return "Shared with you: " + string.Join(", ", parts);
     }
 }

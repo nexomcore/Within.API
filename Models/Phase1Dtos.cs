@@ -312,6 +312,7 @@ public sealed record CircleDto(
     string Name,
     string Slug,
     string Description,
+    Guid CreatedByUserId,
     CircleType Type,
     CircleVisibility Visibility,
     CircleStatus Status,
@@ -319,13 +320,37 @@ public sealed record CircleDto(
     int MemberCount,
     int ThreadCount,
     int EventCount,
-    bool IsMember);
+    bool IsMember,
+    bool IsPendingMember,
+    CircleMemberRole? ViewerRole,
+    bool CanManage);
+
+public sealed record CircleCreateDto(
+    string Name,
+    string Description,
+    WithinLens Lens,
+    CircleVisibility Visibility);
+
+public sealed record CircleUpdateDto(
+    string Name,
+    string Description,
+    WithinLens Lens,
+    CircleVisibility Visibility);
 
 public sealed record CircleGuidelineDto(Guid Id, string Title, string Body, int SortOrder);
+
+public sealed record CircleAnnouncementDto(
+    Guid Id,
+    string Body,
+    bool IsPinned,
+    CommunityAuthorDto Author,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
 
 public sealed record CircleDetailDto(
     CircleDto Circle,
     CircleGuidelineDto[] Guidelines,
+    CircleAnnouncementDto[] Announcements,
     CircleThreadDto[] LatestThreads,
     EventDto[] SharedEvents);
 
@@ -343,7 +368,11 @@ public sealed record CircleThreadDto(
     int CommentCount,
     bool IsHelpful,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    // Circle-identity-safe display metadata. Tap the author via contextType=CirclePost,
+    // contextId=CircleId, targetContextProfileId=Id. Author.Id is Guid.Empty for non-real identities.
+    CircleIdentityMode AuthorIdentityMode = CircleIdentityMode.RealProfile,
+    bool AuthorIsClickable = false);
 
 public sealed record CircleThreadDetailDto(CircleThreadDto Thread, CircleThreadCommentDto[] Comments);
 
@@ -356,7 +385,11 @@ public sealed record CircleThreadCommentDto(
     int HelpfulCount,
     bool IsHelpful,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    // Tap the author via contextType=CircleComment, contextId=CircleId, targetContextProfileId=Id.
+    Guid CircleId = default,
+    CircleIdentityMode AuthorIdentityMode = CircleIdentityMode.RealProfile,
+    bool AuthorIsClickable = false);
 
 public sealed record CircleCreateThreadDto(
     CommunityPostType ThreadType,
@@ -373,6 +406,20 @@ public sealed record CircleUpdateThreadDto(
 public sealed record CircleCreateCommentDto(string Body);
 
 public sealed record CircleShareEventDto(Guid EventId, string? OptionalNote);
+
+public sealed record CircleJoinRequestDto(
+    Guid Id,
+    Guid CircleId,
+    string CircleName,
+    CommunityAuthorDto User,
+    CircleJoinRequestStatus Status,
+    DateTimeOffset RequestedAt,
+    CommunityAuthorDto? ReviewedBy,
+    DateTimeOffset? ReviewedAt);
+
+public sealed record CircleRoleUpdateDto(CircleMemberRole Role);
+
+public sealed record CircleAnnouncementCreateDto(string Body, bool IsPinned);
 
 public sealed record CircleReportRequestDto(
     Guid? ThreadId,
@@ -417,6 +464,50 @@ public sealed record UserSearchResultDto(
 
 public sealed record ConnectionRequestDto(Guid ReceiverUserId);
 
+// Context-safe action requests. The frontend may not hold the real target userId
+// (pseudonym/hidden identities), so it references the displayed identity by context.
+// The backend resolves the real user internally. Spec §9.
+public sealed record ConnectionFromContextDto(
+    ProfileContextType ContextType,
+    Guid ContextId,
+    Guid TargetContextProfileId);
+
+public sealed record BlockFromContextDto(
+    ProfileContextType ContextType,
+    Guid ContextId,
+    Guid TargetContextProfileId);
+
+public sealed record ReportFromContextDto(
+    ProfileContextType ContextType,
+    Guid ContextId,
+    Guid TargetContextProfileId,
+    UserReportReason Reason,
+    string? Details);
+
+// Context-safe display identity (spec §8 getDisplayIdentityForContext).
+public sealed record DisplayIdentityDto(
+    string DisplayName,
+    CircleIdentityMode IdentityMode,
+    bool IsClickable,
+    bool ProfileLinkAllowed);
+
+// The privacy-safe card returned when a displayed name is tapped (spec §8.2).
+// Note: never carries the real userId for Pseudonym/HiddenProfile identities.
+public sealed record ProfilePreviewDto(
+    string DisplayName,
+    string? AvatarUrl,
+    string? BioPreview,
+    string? LocationPreview,
+    string? SharedContextSummary,
+    CircleIdentityMode IdentityMode,
+    bool CanViewFullProfile,
+    bool CanRequestConnection,
+    ProfileConnectionState ConnectionStatus,
+    bool CanReport,
+    bool CanBlock,
+    string? SafeProfileRoute,
+    Guid? ConnectionId);
+
 public sealed record BlockUserDto(Guid UserId);
 
 public sealed record UserReportRequestDto(
@@ -457,12 +548,17 @@ public sealed record CircleIdentityDto(
 public sealed record UpdateCircleIdentityDto(CircleIdentityMode IdentityMode, string? DisplayNameOverride);
 
 public sealed record CircleMemberDto(
-    Guid UserId,
+    // Null for Pseudonym/HiddenProfile members so the real identity never reaches the client.
+    Guid? UserId,
     string DisplayName,
     CircleIdentityMode IdentityMode,
     bool ProfileLinkAllowed,
+    CircleMemberRole Role,
     CircleMemberStatus Status,
-    DateTimeOffset JoinedAt);
+    DateTimeOffset JoinedAt,
+    // Safe handle to pass to /api/profile-preview as targetContextProfileId (the membership id).
+    Guid ContextProfileId = default,
+    bool IsClickable = false);
 
 public sealed record ReviewDto(Guid Id, string AuthorName, int Rating, string Body, DateTimeOffset CreatedUtc);
 
@@ -475,7 +571,44 @@ public sealed record NotificationPreferencesDto(
     bool EventRemindersEnabled,
     bool CommunitySummariesEnabled,
     bool ProviderNewEventsEnabled,
+    bool FriendRequestsEnabled,
+    bool EventInvitesEnabled,
+    bool FriendActivityEnabled,
+    bool CircleRepliesEnabled,
+    bool CommentRepliesEnabled,
+    bool MentionsEnabled,
     WithinLens PreferredLens);
+
+public sealed record NotificationDto(
+    Guid Id,
+    NotificationKind Kind,
+    string Title,
+    string Body,
+    NotificationTargetType? TargetType,
+    Guid? TargetId,
+    Guid? ActorUserId,
+    Guid? CircleId,
+    Guid? EventId,
+    Guid? RelatedUserId,
+    bool IsRead,
+    DateTimeOffset CreatedUtc,
+    DateTimeOffset? ReadUtc);
+
+public sealed record CreateNotificationDto(
+    Guid UserId,
+    NotificationKind Kind,
+    string Title,
+    string Body,
+    NotificationTargetType? TargetType,
+    Guid? TargetId,
+    Guid? ActorUserId,
+    Guid? CircleId,
+    Guid? EventId,
+    Guid? RelatedUserId);
+
+public sealed record PushTokenDto(string Token, string Platform);
+
+public sealed record NotificationMuteDto(NotificationMuteTargetType TargetType, Guid TargetId);
 
 public sealed record HomeDashboardDto(
     UserSummaryDto User,

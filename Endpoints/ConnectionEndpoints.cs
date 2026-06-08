@@ -44,7 +44,7 @@ public static class ConnectionEndpoints
             return Results.Ok(await ToConnectionDtos(db, items, userId));
         });
 
-        connections.MapPost("/request", async (ConnectionRequestDto request, WithinDbContext db, PrivacyService privacy, ClaimsPrincipal principal) =>
+        connections.MapPost("/request", async (ConnectionRequestDto request, WithinDbContext db, PrivacyService privacy, NotificationService notifications, ClaimsPrincipal principal) =>
         {
             var requesterUserId = principal.UserId();
             if (!await db.Users.AnyAsync(item => item.Id == request.ReceiverUserId)) return Results.NotFound();
@@ -74,14 +74,15 @@ public static class ConnectionEndpoints
             connection.BlockedByUserId = null;
             if (existing is null) db.Connections.Add(connection);
             await db.SaveChangesAsync();
+            await notifications.NotifyFriendRequestReceived(connection.ReceiverUserId, connection.RequesterUserId, connection.Id);
             return Results.Created($"/api/connections/{connection.Id}", await ToConnectionDto(db, connection, requesterUserId));
         });
 
-        connections.MapPost("/{connectionId:guid}/accept", async (Guid connectionId, WithinDbContext db, ClaimsPrincipal principal) =>
-            await UpdateIncoming(db, principal.UserId(), connectionId, ConnectionStatus.Accepted));
+        connections.MapPost("/{connectionId:guid}/accept", async (Guid connectionId, WithinDbContext db, NotificationService notifications, ClaimsPrincipal principal) =>
+            await UpdateIncoming(db, notifications, principal.UserId(), connectionId, ConnectionStatus.Accepted));
 
         connections.MapPost("/{connectionId:guid}/reject", async (Guid connectionId, WithinDbContext db, ClaimsPrincipal principal) =>
-            await UpdateIncoming(db, principal.UserId(), connectionId, ConnectionStatus.Rejected));
+            await UpdateIncoming(db, null, principal.UserId(), connectionId, ConnectionStatus.Rejected));
 
         connections.MapPost("/{connectionId:guid}/cancel", async (Guid connectionId, WithinDbContext db, ClaimsPrincipal principal) =>
         {
@@ -161,7 +162,7 @@ public static class ConnectionEndpoints
         return app;
     }
 
-    private static async Task<IResult> UpdateIncoming(WithinDbContext db, Guid userId, Guid connectionId, ConnectionStatus status)
+    private static async Task<IResult> UpdateIncoming(WithinDbContext db, NotificationService? notifications, Guid userId, Guid connectionId, ConnectionStatus status)
     {
         var connection = await db.Connections.FindAsync(connectionId);
         if (connection is null) return Results.NotFound();
@@ -170,6 +171,10 @@ public static class ConnectionEndpoints
         connection.RespondedAt = DateTimeOffset.UtcNow;
         connection.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
+        if (status == ConnectionStatus.Accepted)
+        {
+            await notifications!.NotifyFriendRequestAccepted(connection.RequesterUserId, connection.ReceiverUserId, connection.Id);
+        }
         return Results.NoContent();
     }
 

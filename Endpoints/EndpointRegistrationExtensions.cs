@@ -9,6 +9,7 @@ public static class EndpointRegistrationExtensions
         app.MapUserEndpoints();
         app.MapUserPrivacyEndpoints();
         app.MapConnectionEndpoints();
+        app.MapProfilePreviewEndpoints();
         app.MapAdminEndpoints();
         app.MapMarketFitEndpoints();
         app.MapProviderApplicationEndpoints();

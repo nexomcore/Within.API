@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using WithinAPI.Data;
@@ -11,9 +12,11 @@ using WithinAPI.Data;
 namespace WithinAPI.Data.Migrations
 {
     [DbContext(typeof(WithinDbContext))]
-    partial class WithinDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260608111058_PrivacyAwareNotifications")]
+    partial class PrivacyAwareNotifications
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -23,9 +26,7 @@ namespace WithinAPI.Data.Migrations
 
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "circle_event_status", new[] { "active", "removed" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "circle_identity_mode", new[] { "real_profile", "pseudonym", "hidden_profile" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "circle_join_request_status", new[] { "pending", "approved", "rejected" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "circle_member_role", new[] { "admin", "moderator", "member" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "circle_member_status", new[] { "active", "left", "removed", "pending", "rejected", "blocked" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "circle_member_status", new[] { "active", "left", "removed" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "circle_post_visibility", new[] { "public", "members_only", "private" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "circle_privacy_type", new[] { "open", "approval_required", "private_invite_only", "sensitive" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "circle_role_kind", new[] { "moderator", "admin" });
@@ -43,7 +44,7 @@ namespace WithinAPI.Data.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "friend_request_permission", new[] { "everyone", "friends_of_friends", "same_circle_or_event", "no_one" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "member_list_visibility", new[] { "public", "members_only", "admins_only", "hidden" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "mention_source_type", new[] { "event_comment", "circle_post", "circle_comment" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "notification_kind", new[] { "daily_motivation", "event_reminder24h", "event_reminder2h", "event_updated", "community_summary", "provider_new_event", "friend_request_received", "friend_request_accepted", "event_invite", "public_friend_rsvp", "circle_thread_reply", "comment_reply", "user_mention", "event_reminder", "circle_join_request" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "notification_kind", new[] { "daily_motivation", "event_reminder24h", "event_reminder2h", "event_updated", "community_summary", "provider_new_event", "friend_request_received", "friend_request_accepted", "event_invite", "public_friend_rsvp", "circle_thread_reply", "comment_reply", "user_mention", "event_reminder" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "notification_mute_target_type", new[] { "circle", "event", "user" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "notification_target_type", new[] { "event", "circle", "circle_thread", "community_post", "profile", "connection", "comment" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "profile_visibility", new[] { "public", "friends_only", "circle_members_only", "private" });
@@ -81,9 +82,6 @@ namespace WithinAPI.Data.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("CreatedByUserId")
-                        .HasColumnType("uuid");
 
                     b.Property<int>("DefaultEventRsvpVisibility")
                         .ValueGeneratedOnAdd()
@@ -132,47 +130,12 @@ namespace WithinAPI.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CreatedByUserId");
-
                     b.HasIndex("Slug")
                         .IsUnique();
 
                     b.HasIndex("Visibility", "Status");
 
                     b.ToTable("Circles", "within");
-                });
-
-            modelBuilder.Entity("WithinAPI.Domain.CircleAnnouncement", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AuthorUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Body")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<Guid>("CircleId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsPinned")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CircleId", "IsPinned", "CreatedAt");
-
-                    b.ToTable("CircleAnnouncements", "within");
                 });
 
             modelBuilder.Entity("WithinAPI.Domain.CircleEvent", b =>
@@ -273,40 +236,6 @@ namespace WithinAPI.Data.Migrations
                     b.ToTable("CircleHelpfulReactions", "within");
                 });
 
-            modelBuilder.Entity("WithinAPI.Domain.CircleJoinRequest", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CircleId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("RequestedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("ReviewedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("ReviewedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CircleId", "UserId")
-                        .IsUnique();
-
-                    b.HasIndex("CircleId", "Status", "RequestedAt");
-
-                    b.ToTable("CircleJoinRequests", "within");
-                });
-
             modelBuilder.Entity("WithinAPI.Domain.CircleMember", b =>
                 {
                     b.Property<Guid>("Id")
@@ -329,11 +258,6 @@ namespace WithinAPI.Data.Migrations
                     b.Property<DateTimeOffset?>("LeftAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("Role")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(2);
-
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -349,8 +273,6 @@ namespace WithinAPI.Data.Migrations
                         .IsUnique();
 
                     b.HasIndex("UserId", "Status");
-
-                    b.HasIndex("CircleId", "Role", "Status");
 
                     b.ToTable("CircleMembers", "within");
                 });

@@ -27,6 +27,7 @@ public sealed class WithinDbContext(DbContextOptions<WithinDbContext> options) :
     public DbSet<CommunityReport> CommunityReports => Set<CommunityReport>();
     public DbSet<Circle> Circles => Set<Circle>();
     public DbSet<CircleMember> CircleMembers => Set<CircleMember>();
+    public DbSet<CircleJoinRequest> CircleJoinRequests => Set<CircleJoinRequest>();
     public DbSet<CircleRole> CircleRoles => Set<CircleRole>();
     public DbSet<CircleThread> CircleThreads => Set<CircleThread>();
     public DbSet<CircleThreadComment> CircleThreadComments => Set<CircleThreadComment>();
@@ -34,14 +35,18 @@ public sealed class WithinDbContext(DbContextOptions<WithinDbContext> options) :
     public DbSet<CircleHelpfulReaction> CircleHelpfulReactions => Set<CircleHelpfulReaction>();
     public DbSet<CircleReport> CircleReports => Set<CircleReport>();
     public DbSet<CircleGuideline> CircleGuidelines => Set<CircleGuideline>();
+    public DbSet<CircleAnnouncement> CircleAnnouncements => Set<CircleAnnouncement>();
     public DbSet<Connection> Connections => Set<Connection>();
     public DbSet<UserPrivacySettings> UserPrivacySettings => Set<UserPrivacySettings>();
     public DbSet<EventInvite> EventInvites => Set<EventInvite>();
     public DbSet<Mention> Mentions => Set<Mention>();
     public DbSet<UserReport> UserReports => Set<UserReport>();
     public DbSet<Review> Reviews => Set<Review>();
+    public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
+    public DbSet<PushToken> PushTokens => Set<PushToken>();
     public DbSet<DeviceToken> DeviceTokens => Set<DeviceToken>();
+    public DbSet<NotificationMute> NotificationMutes => Set<NotificationMute>();
     public DbSet<NotificationSchedule> NotificationSchedules => Set<NotificationSchedule>();
     public DbSet<DailyCheckIn> DailyCheckIns => Set<DailyCheckIn>();
     public DbSet<MonthlyProfile> MonthlyProfiles => Set<MonthlyProfile>();
@@ -58,6 +63,8 @@ public sealed class WithinDbContext(DbContextOptions<WithinDbContext> options) :
         modelBuilder.HasPostgresEnum<EventStatus>();
         modelBuilder.HasPostgresEnum<SignupType>();
         modelBuilder.HasPostgresEnum<NotificationKind>();
+        modelBuilder.HasPostgresEnum<NotificationTargetType>();
+        modelBuilder.HasPostgresEnum<NotificationMuteTargetType>();
         modelBuilder.HasPostgresEnum<ProviderApplicationStatus>();
         modelBuilder.HasPostgresEnum<ProviderCategory>();
         modelBuilder.HasPostgresEnum<CommunityPostType>();
@@ -68,6 +75,8 @@ public sealed class WithinDbContext(DbContextOptions<WithinDbContext> options) :
         modelBuilder.HasPostgresEnum<CircleVisibility>();
         modelBuilder.HasPostgresEnum<CircleStatus>();
         modelBuilder.HasPostgresEnum<CircleMemberStatus>();
+        modelBuilder.HasPostgresEnum<CircleMemberRole>();
+        modelBuilder.HasPostgresEnum<CircleJoinRequestStatus>();
         modelBuilder.HasPostgresEnum<CircleRoleKind>();
         modelBuilder.HasPostgresEnum<CircleEventStatus>();
         modelBuilder.HasPostgresEnum<ConnectionStatus>();
@@ -195,6 +204,7 @@ public sealed class WithinDbContext(DbContextOptions<WithinDbContext> options) :
         {
             entity.HasIndex(item => item.Slug).IsUnique();
             entity.HasIndex(item => new { item.Visibility, item.Status });
+            entity.HasIndex(item => item.CreatedByUserId);
             entity.Property(item => item.Name).HasMaxLength(120);
             entity.Property(item => item.Slug).HasMaxLength(120);
             entity.Property(item => item.Description).HasMaxLength(600);
@@ -210,7 +220,15 @@ public sealed class WithinDbContext(DbContextOptions<WithinDbContext> options) :
         {
             entity.HasIndex(item => new { item.CircleId, item.UserId }).IsUnique();
             entity.HasIndex(item => new { item.UserId, item.Status });
+            entity.HasIndex(item => new { item.CircleId, item.Role, item.Status });
+            entity.Property(item => item.Role).HasDefaultValue(CircleMemberRole.Member);
             entity.Property(item => item.DisplayNameOverride).HasMaxLength(40);
+        });
+
+        modelBuilder.Entity<CircleJoinRequest>(entity =>
+        {
+            entity.HasIndex(item => new { item.CircleId, item.UserId }).IsUnique();
+            entity.HasIndex(item => new { item.CircleId, item.Status, item.RequestedAt });
         });
 
         modelBuilder.Entity<CircleRole>(entity =>
@@ -269,6 +287,12 @@ public sealed class WithinDbContext(DbContextOptions<WithinDbContext> options) :
             entity.Property(item => item.Body).HasMaxLength(1000);
         });
 
+        modelBuilder.Entity<CircleAnnouncement>(entity =>
+        {
+            entity.HasIndex(item => new { item.CircleId, item.IsPinned, item.CreatedAt });
+            entity.Property(item => item.Body).HasMaxLength(1000);
+        });
+
         modelBuilder.Entity<Connection>(entity =>
         {
             entity.HasIndex(item => new { item.RequesterUserId, item.ReceiverUserId });
@@ -305,6 +329,46 @@ public sealed class WithinDbContext(DbContextOptions<WithinDbContext> options) :
         {
             entity.HasIndex(item => new { item.UserId, item.CheckInDate }).IsUnique();
             entity.Property(item => item.Tags).HasColumnType("text[]");
+        });
+
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.ToTable("notifications");
+            entity.HasIndex(item => new { item.UserId, item.IsRead, item.CreatedUtc });
+            entity.HasIndex(item => new { item.TargetType, item.TargetId });
+            entity.Property(item => item.Title).HasMaxLength(160);
+            entity.Property(item => item.Body).HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<PushToken>(entity =>
+        {
+            entity.ToTable("push_tokens");
+            entity.HasIndex(item => item.Token).IsUnique();
+            entity.HasIndex(item => item.UserId);
+            entity.Property(item => item.Platform).HasMaxLength(40);
+            entity.Property(item => item.Token).HasMaxLength(512);
+        });
+
+        modelBuilder.Entity<NotificationPreference>(entity =>
+        {
+            entity.ToTable("notification_preferences");
+            entity.HasIndex(item => item.UserId).IsUnique();
+            entity.Property(item => item.DailyMotivationEnabled).HasDefaultValue(true);
+            entity.Property(item => item.EventRemindersEnabled).HasDefaultValue(true);
+            entity.Property(item => item.CommunitySummariesEnabled).HasDefaultValue(true);
+            entity.Property(item => item.ProviderNewEventsEnabled).HasDefaultValue(true);
+            entity.Property(item => item.FriendRequestsEnabled).HasDefaultValue(true);
+            entity.Property(item => item.EventInvitesEnabled).HasDefaultValue(true);
+            entity.Property(item => item.FriendActivityEnabled).HasDefaultValue(true);
+            entity.Property(item => item.CircleRepliesEnabled).HasDefaultValue(true);
+            entity.Property(item => item.CommentRepliesEnabled).HasDefaultValue(true);
+            entity.Property(item => item.MentionsEnabled).HasDefaultValue(true);
+        });
+
+        modelBuilder.Entity<NotificationMute>(entity =>
+        {
+            entity.ToTable("notification_mutes");
+            entity.HasIndex(item => new { item.UserId, item.TargetType, item.TargetId }).IsUnique();
         });
 
         modelBuilder.Entity<MarketFitSubmission>(entity =>

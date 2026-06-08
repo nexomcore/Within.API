@@ -23,6 +23,10 @@ public static class CircleSeedData
     public static async Task EnsureSeededAsync(WithinDbContext db)
     {
         var now = DateTimeOffset.UtcNow;
+        var bootstrapAdminId = db.Users
+            .Where(user => user.Role == WithinRole.Admin)
+            .Select(user => (Guid?)user.Id)
+            .FirstOrDefault();
 
         foreach (var item in PlatformCircles)
         {
@@ -36,6 +40,7 @@ public static class CircleSeedData
                     Name = item.Name,
                     Slug = slug,
                     Description = item.Description,
+                    CreatedByUserId = bootstrapAdminId ?? Guid.Empty,
                     Lens = item.Lens,
                     Type = CircleType.Platform,
                     Visibility = CircleVisibility.Public,
@@ -56,6 +61,34 @@ public static class CircleSeedData
                 circle.MemberListVisibility = MemberListVisibility.MembersOnly;
                 circle.DefaultPostVisibility = CirclePostVisibility.MembersOnly;
                 circle.DefaultEventRsvpVisibility = RsvpVisibility.FriendsOnly;
+                if (circle.CreatedByUserId == Guid.Empty && bootstrapAdminId is not null)
+                {
+                    circle.CreatedByUserId = bootstrapAdminId.Value;
+                }
+            }
+
+            if (bootstrapAdminId is not null && !db.CircleMembers.Any(member => member.CircleId == circle.Id && member.Status == CircleMemberStatus.Active && member.Role == CircleMemberRole.Admin))
+            {
+                var member = db.CircleMembers.FirstOrDefault(member => member.CircleId == circle.Id && member.UserId == bootstrapAdminId.Value);
+                if (member is null)
+                {
+                    db.CircleMembers.Add(new CircleMember
+                    {
+                        Id = Guid.NewGuid(),
+                        CircleId = circle.Id,
+                        UserId = bootstrapAdminId.Value,
+                        Role = CircleMemberRole.Admin,
+                        Status = CircleMemberStatus.Active,
+                        JoinedAt = now,
+                        UpdatedAt = now
+                    });
+                }
+                else
+                {
+                    member.Role = CircleMemberRole.Admin;
+                    member.Status = CircleMemberStatus.Active;
+                    member.UpdatedAt = now;
+                }
             }
 
             if (!db.CircleGuidelines.Any(guideline => guideline.CircleId == circle.Id))

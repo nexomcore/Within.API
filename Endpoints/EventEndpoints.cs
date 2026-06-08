@@ -67,7 +67,7 @@ public static class EventEndpoints
             return Results.Ok(await ApiMapping.ProjectEvents(db.Events.Where(item => item.Id == evt.Id), db, principal.UserId()).FirstAsync());
         }).RequireAuthorization();
 
-        events.MapPost("/{id:guid}/join", async (Guid id, JoinEventDto request, WithinDbContext db, PrivacyService privacy, ClaimsPrincipal principal) =>
+        events.MapPost("/{id:guid}/join", async (Guid id, JoinEventDto request, WithinDbContext db, PrivacyService privacy, NotificationService notifications, ClaimsPrincipal principal) =>
         {
             var userId = principal.UserId();
             var evt = await db.Events.FindAsync(id);
@@ -87,10 +87,12 @@ public static class EventEndpoints
             }
             registration.UpdatedUtc = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync();
+            await notifications.ScheduleEventReminders(userId, evt, request.State);
+            await notifications.NotifyPublicFriendRsvp(userId, id);
             return Results.Ok(await ApiMapping.ProjectEvents(db.Events.Where(item => item.Id == id), db, userId).FirstAsync());
         }).RequireAuthorization();
 
-        events.MapPut("/{id:guid}/rsvp", async (Guid id, EventRsvpDto request, WithinDbContext db, PrivacyService privacy, ClaimsPrincipal principal) =>
+        events.MapPut("/{id:guid}/rsvp", async (Guid id, EventRsvpDto request, WithinDbContext db, PrivacyService privacy, NotificationService notifications, ClaimsPrincipal principal) =>
         {
             var userId = principal.UserId();
             var evt = await db.Events.FindAsync(id);
@@ -107,6 +109,8 @@ public static class EventEndpoints
             registration.Visibility = request.Visibility ?? await DefaultRsvpVisibility(db, privacy, userId, id);
             registration.UpdatedUtc = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync();
+            await notifications.ScheduleEventReminders(userId, evt, request.State);
+            await notifications.NotifyPublicFriendRsvp(userId, id);
             return Results.Ok(await ApiMapping.ProjectEvents(db.Events.Where(item => item.Id == id), db, userId).FirstAsync());
         }).RequireAuthorization();
 
@@ -179,7 +183,7 @@ public static class EventEndpoints
             return Results.Ok(new FriendsGoingDto(friends.Count, friends.ToArray()));
         }).RequireAuthorization();
 
-        events.MapPost("/{id:guid}/invites", async (Guid id, CreateEventInvitesDto request, WithinDbContext db, PrivacyService privacy, ClaimsPrincipal principal) =>
+        events.MapPost("/{id:guid}/invites", async (Guid id, CreateEventInvitesDto request, WithinDbContext db, PrivacyService privacy, NotificationService notifications, ClaimsPrincipal principal) =>
         {
             var inviterUserId = principal.UserId();
             if (!await db.Events.AnyAsync(item => item.Id == id)) return Results.NotFound();
@@ -210,6 +214,10 @@ public static class EventEndpoints
             }
 
             await db.SaveChangesAsync();
+            foreach (var invite in created)
+            {
+                await notifications.NotifyEventInvite(invite.InvitedUserId, invite.InvitedByUserId, invite.EventId, invite.Id);
+            }
             return Results.Ok(await ToInviteDtos(db, created.ToArray()));
         }).RequireAuthorization();
 
@@ -233,7 +241,7 @@ public static class EventEndpoints
         events.MapGet("/{id:guid}/comments", async (Guid id, WithinDbContext db) =>
             Results.Ok(await ApiMapping.ProjectComments(db.Comments.Where(item => item.EventId == id && !item.IsHidden), db).ToArrayAsync()));
 
-        events.MapPost("/{id:guid}/comments", async (Guid id, UpsertCommentDto request, WithinDbContext db, ClaimsPrincipal principal) =>
+        events.MapPost("/{id:guid}/comments", async (Guid id, UpsertCommentDto request, WithinDbContext db, NotificationService notifications, ClaimsPrincipal principal) =>
         {
             if (!await db.Events.AnyAsync(item => item.Id == id)) return Results.NotFound();
 
@@ -258,6 +266,11 @@ public static class EventEndpoints
             };
             db.Comments.Add(comment);
             await db.SaveChangesAsync();
+            if (request.ParentCommentId is not null)
+            {
+                await notifications.NotifyCommentReply(request.ParentCommentId.Value, comment.Id, comment.AuthorUserId, id);
+            }
+            await notifications.NotifyMentions(comment.AuthorUserId, body, MentionSourceType.EventComment, comment.Id, null, id);
             var dto = await ApiMapping.ProjectComments(db.Comments.Where(item => item.Id == comment.Id), db).FirstAsync();
             return Results.Created($"/api/events/{id}/comments/{comment.Id}", dto);
         }).RequireAuthorization();
