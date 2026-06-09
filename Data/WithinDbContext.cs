@@ -55,6 +55,9 @@ public sealed class WithinDbContext(DbContextOptions<WithinDbContext> options) :
     public DbSet<DeviceToken> DeviceTokens => Set<DeviceToken>();
     public DbSet<NotificationMute> NotificationMutes => Set<NotificationMute>();
     public DbSet<NotificationSchedule> NotificationSchedules => Set<NotificationSchedule>();
+    public DbSet<UserWellbeingProfile> UserWellbeingProfiles => Set<UserWellbeingProfile>();
+    public DbSet<UserWellbeingInterest> UserWellbeingInterests => Set<UserWellbeingInterest>();
+    public DbSet<UserWellbeingGoal> UserWellbeingGoals => Set<UserWellbeingGoal>();
     public DbSet<DailyCheckIn> DailyCheckIns => Set<DailyCheckIn>();
     public DbSet<MonthlyProfile> MonthlyProfiles => Set<MonthlyProfile>();
     public DbSet<HabitTemplate> HabitTemplates => Set<HabitTemplate>();
@@ -446,12 +449,58 @@ public sealed class WithinDbContext(DbContextOptions<WithinDbContext> options) :
             entity.HasIndex(item => new { item.UserId, item.CheckInDate }).IsUnique();
             entity.Property(item => item.Tags).HasColumnType("text[]");
             entity.Property(item => item.Mood).HasConversion<string>().HasMaxLength(32);
+            entity.Property(item => item.MoodScore);
             entity.Property(item => item.Energy).HasConversion<string>().HasMaxLength(32);
+            entity.Property(item => item.EnergyLevel);
+            entity.Property(item => item.StressLevel);
+            entity.Property(item => item.DidMoveToday).HasDefaultValue(false);
+            entity.Property(item => item.DidMeditateToday).HasDefaultValue(false);
             entity.Property(item => item.SleepQuality).HasConversion<string>().HasMaxLength(32);
             entity.Property(item => item.Intention).HasConversion<string>().HasMaxLength(48);
             entity.Property(item => item.SleepHours).HasColumnType("numeric(4,1)");
             entity.Property(item => item.Note).HasMaxLength(500);
+            entity.Property(item => item.JournalEntry).HasMaxLength(1000);
             entity.Property(item => item.SuggestedActionKey).HasMaxLength(64);
+        });
+
+        modelBuilder.Entity<UserWellbeingProfile>(entity =>
+        {
+            entity.HasIndex(item => item.UserId).IsUnique();
+            entity.Property(item => item.FirstName).HasMaxLength(80);
+            entity.Property(item => item.DisplayName).HasMaxLength(120);
+            entity.Property(item => item.UsePseudonym).HasDefaultValue(false);
+            entity.Property(item => item.Pseudonym).HasMaxLength(80);
+            entity.Property(item => item.AgeRange).HasMaxLength(40);
+            entity.Property(item => item.Gender).HasMaxLength(80);
+            entity.Property(item => item.LocationCity).HasMaxLength(120);
+            entity.Property(item => item.LocationSuburb).HasMaxLength(120);
+            entity.Property(item => item.ProfilePhotoUrl).HasMaxLength(1000);
+            entity.Property(item => item.HeightCm).HasColumnType("numeric(5,1)");
+            entity.Property(item => item.WeightKg).HasColumnType("numeric(5,1)");
+            entity.Property(item => item.ActivityLevel).HasMaxLength(40);
+            entity.Property(item => item.AverageSleepHours).HasColumnType("numeric(3,1)");
+            entity.Property(item => item.WaterIntakeLitres).HasColumnType("numeric(3,1)");
+            entity.Property(item => item.MeditationFrequency).HasMaxLength(80);
+            entity.Property(item => item.BodyFatPercentage).HasColumnType("numeric(4,1)");
+            entity.Property(item => item.Vo2Max).HasColumnType("numeric(5,1)");
+            entity.Property(item => item.WearableProvider).HasMaxLength(80);
+            entity.Property(item => item.WearableConnected).HasDefaultValue(false);
+            entity.Property(item => item.OnboardingCompleted).HasDefaultValue(false);
+        });
+
+        modelBuilder.Entity<UserWellbeingInterest>(entity =>
+        {
+            entity.HasIndex(item => new { item.UserId, item.InterestKey }).IsUnique();
+            entity.Property(item => item.Category).HasMaxLength(20);
+            entity.Property(item => item.InterestKey).HasMaxLength(80);
+            entity.Property(item => item.InterestLabel).HasMaxLength(120);
+        });
+
+        modelBuilder.Entity<UserWellbeingGoal>(entity =>
+        {
+            entity.HasIndex(item => new { item.UserId, item.GoalKey }).IsUnique();
+            entity.Property(item => item.GoalKey).HasMaxLength(80);
+            entity.Property(item => item.GoalLabel).HasMaxLength(120);
         });
 
         modelBuilder.Entity<HabitTemplate>(entity =>

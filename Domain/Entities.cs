@@ -1059,6 +1059,7 @@ public enum CheckInMood
     Good,
     Okay,
     Low,
+    Struggling,
     Stressed,
     Anxious,
     Tired,
@@ -1104,16 +1105,81 @@ public sealed class DailyCheckIn
     public Guid UserId { get; set; }
     public DateOnly CheckInDate { get; set; }
     public CheckInMood Mood { get; set; }
+    public int? MoodScore { get; set; }
     public CheckInEnergy Energy { get; set; }
+    public int? EnergyLevel { get; set; }
+    public int? StressLevel { get; set; }
+    public bool DidMoveToday { get; set; }
+    public bool DidMeditateToday { get; set; }
     public CheckInSleepQuality? SleepQuality { get; set; }
     public decimal? SleepHours { get; set; }
     public DailyIntention Intention { get; set; }
     public string[] Tags { get; set; } = [];
     public string? Note { get; set; }
+    public string? JournalEntry { get; set; }
     public string? SuggestedActionKey { get; set; }
     public int DailyBalanceScore { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
     public DateTimeOffset UpdatedAtUtc { get; set; }
+}
+
+public sealed class UserWellbeingProfile
+{
+    // Wellbeing and lifestyle profile data is not medical diagnosis data.
+    // Do not expose height, weight, mood, stress, journal entries, health metrics, or check-ins on public profiles.
+    // Future AI insights over this data must avoid medical diagnosis or clinical advice.
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    public string FirstName { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public bool UsePseudonym { get; set; }
+    public string? Pseudonym { get; set; }
+    public DateOnly? DateOfBirth { get; set; }
+    public string? AgeRange { get; set; }
+    public string? Gender { get; set; }
+    public string? LocationCity { get; set; }
+    public string? LocationSuburb { get; set; }
+    public string? ProfilePhotoUrl { get; set; }
+    public decimal? HeightCm { get; set; }
+    public decimal? WeightKg { get; set; }
+    public string? ActivityLevel { get; set; }
+    public decimal? AverageSleepHours { get; set; }
+    public decimal? WaterIntakeLitres { get; set; }
+    public int? ExerciseDaysPerWeek { get; set; }
+    public string? MeditationFrequency { get; set; }
+    public int? StressLevelBaseline { get; set; }
+    public int? EnergyLevelBaseline { get; set; }
+    public int? MoodLevelBaseline { get; set; }
+    public decimal? BodyFatPercentage { get; set; }
+    public int? RestingHeartRate { get; set; }
+    public decimal? Vo2Max { get; set; }
+    public int? BloodPressureSystolic { get; set; }
+    public int? BloodPressureDiastolic { get; set; }
+    public string? WearableProvider { get; set; }
+    public bool WearableConnected { get; set; }
+    public DateTimeOffset? LastWearableSyncAt { get; set; }
+    public bool OnboardingCompleted { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+public sealed class UserWellbeingInterest
+{
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    public string Category { get; set; } = "";
+    public string InterestKey { get; set; } = "";
+    public string InterestLabel { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; }
+}
+
+public sealed class UserWellbeingGoal
+{
+    public Guid Id { get; set; }
+    public Guid UserId { get; set; }
+    public string GoalKey { get; set; } = "";
+    public string GoalLabel { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; }
 }
 
 public sealed class MonthlyProfile

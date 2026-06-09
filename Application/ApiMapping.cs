@@ -49,6 +49,77 @@ public static class ApiMapping
         DailyBalanceScore = checkIn.DailyBalanceScore
     };
 
+    public static WellbeingProfileDto ToDto(this UserWellbeingProfile profile) => new()
+    {
+        Id = profile.Id.ToString(),
+        UserId = profile.UserId.ToString(),
+        FirstName = profile.FirstName,
+        DisplayName = profile.DisplayName,
+        UsePseudonym = profile.UsePseudonym,
+        Pseudonym = profile.Pseudonym,
+        DateOfBirth = profile.DateOfBirth?.ToString("yyyy-MM-dd"),
+        AgeRange = profile.AgeRange,
+        Gender = profile.Gender,
+        LocationCity = profile.LocationCity,
+        LocationSuburb = profile.LocationSuburb,
+        ProfilePhotoUrl = profile.ProfilePhotoUrl,
+        HeightCm = profile.HeightCm,
+        WeightKg = profile.WeightKg,
+        ActivityLevel = profile.ActivityLevel,
+        AverageSleepHours = profile.AverageSleepHours,
+        WaterIntakeLitres = profile.WaterIntakeLitres,
+        ExerciseDaysPerWeek = profile.ExerciseDaysPerWeek,
+        MeditationFrequency = profile.MeditationFrequency,
+        StressLevelBaseline = profile.StressLevelBaseline,
+        EnergyLevelBaseline = profile.EnergyLevelBaseline,
+        MoodLevelBaseline = profile.MoodLevelBaseline,
+        BodyFatPercentage = profile.BodyFatPercentage,
+        RestingHeartRate = profile.RestingHeartRate,
+        Vo2Max = profile.Vo2Max,
+        BloodPressureSystolic = profile.BloodPressureSystolic,
+        BloodPressureDiastolic = profile.BloodPressureDiastolic,
+        WearableProvider = profile.WearableProvider,
+        WearableConnected = profile.WearableConnected,
+        LastWearableSyncAt = profile.LastWearableSyncAt?.ToString("O"),
+        OnboardingCompleted = profile.OnboardingCompleted,
+        CreatedAt = profile.CreatedAt.ToString("O"),
+        UpdatedAt = profile.UpdatedAt.ToString("O")
+    };
+
+    public static MvpDailyCheckInDto ToMvpDto(this DailyCheckIn checkIn) => new()
+    {
+        Id = checkIn.Id.ToString(),
+        CheckInDate = checkIn.CheckInDate.ToString("yyyy-MM-dd"),
+        Mood = checkIn.Mood.ToString(),
+        MoodScore = checkIn.MoodScore ?? MoodScore(checkIn.Mood),
+        EnergyLevel = checkIn.EnergyLevel ?? EnergyScore(checkIn.Energy),
+        StressLevel = checkIn.StressLevel ?? 5,
+        DidMoveToday = checkIn.DidMoveToday,
+        DidMeditateToday = checkIn.DidMeditateToday,
+        JournalEntry = checkIn.JournalEntry ?? checkIn.Note,
+        CreatedAt = checkIn.CreatedAtUtc.ToString("O"),
+        UpdatedAt = checkIn.UpdatedAtUtc.ToString("O")
+    };
+
+    private static int MoodScore(CheckInMood mood) => mood switch
+    {
+        CheckInMood.Great => 5,
+        CheckInMood.Good => 4,
+        CheckInMood.Okay => 3,
+        CheckInMood.Low => 2,
+        CheckInMood.Struggling => 1,
+        _ => 3
+    };
+
+    private static int EnergyScore(CheckInEnergy energy) => energy switch
+    {
+        CheckInEnergy.High => 9,
+        CheckInEnergy.Balanced => 6,
+        CheckInEnergy.Low => 3,
+        CheckInEnergy.Exhausted => 1,
+        _ => 5
+    };
+
     public static HabitTemplateDto ToDto(this HabitTemplate template) => new(
         template.Id.ToString(),
         template.Name,

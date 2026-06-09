@@ -4,6 +4,7 @@ using WithinAPI.Application;
 using WithinAPI.Data;
 using WithinAPI.Domain;
 using WithinAPI.Models;
+using WithinAPI.Services;
 
 namespace WithinAPI.Endpoints;
 
@@ -19,14 +20,29 @@ public static class HomeEndpoints
             var user = await db.Users.FindAsync(userId);
             if (user is null) return Results.Unauthorized();
 
-            var recommended = await ApiMapping.ProjectEvents(
+            var interests = await db.UserWellbeingInterests
+                .Where(item => item.UserId == userId)
+                .Select(item => item.InterestKey)
+                .ToArrayAsync();
+            var goals = await db.UserWellbeingGoals
+                .Where(item => item.UserId == userId)
+                .Select(item => item.GoalKey)
+                .ToArrayAsync();
+            var recommendationCategories = WellbeingRecommendationRules.BuildRecommendedCategories(interests, goals);
+
+            var candidateEvents = await ApiMapping.ProjectEvents(
                     db.Events
                         .Where(item => item.Status == EventStatus.Published)
                         .OrderBy(item => item.StartUtc),
                     db,
                     userId)
-                .Take(5)
+                .Take(20)
                 .ToArrayAsync();
+            var recommended = candidateEvents
+                .OrderByDescending(item => RecommendationScore(item.Tags, item.Title, item.Description, recommendationCategories))
+                .ThenBy(item => item.StartUtc)
+                .Take(5)
+                .ToArray();
             var communities = Array.Empty<CommunityDto>();
             var upcoming = await ApiMapping.ProjectEvents(
                     from evt in db.Events
@@ -53,5 +69,19 @@ public static class HomeEndpoints
         });
 
         return app;
+    }
+
+    private static int RecommendationScore(string[] tags, string title, string description, string[] categories)
+    {
+        if (categories.Length == 0) return 0;
+        var score = 0;
+        var text = $"{title} {description}".ToLowerInvariant();
+        foreach (var category in categories)
+        {
+            if (tags.Any(tag => tag.Equals(category, StringComparison.OrdinalIgnoreCase))) score += 3;
+            if (text.Contains(category.Replace('_', ' '), StringComparison.OrdinalIgnoreCase)) score += 1;
+        }
+
+        return score;
     }
 }
