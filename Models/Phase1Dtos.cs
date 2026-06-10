@@ -370,91 +370,12 @@ public sealed record CommunityAuthorDto(
     WithinRole Role,
     bool IsVerifiedProvider);
 
-public sealed record CommunityTopicDto(
-    Guid Id,
-    string Name,
-    string Slug,
-    string? Description,
-    bool IsActive);
-
-public sealed record CreateCommunityTopicRequest(string Name, string? Description = null);
-
-public sealed record UpdateCommunityTopicRequest(string Name, string? Description, bool IsActive);
-
 public sealed record CommunityEventSummaryDto(
     Guid Id,
     string Title,
     string ProviderName,
     DateTimeOffset StartUtc,
     string LocationName);
-
-public sealed record CommunityPostDto(
-    Guid Id,
-    CommunityPostType PostType,
-    string Title,
-    string Body,
-    CommunityContentStatus Status,
-    CommunityAuthorDto Author,
-    CommunityTopicDto[] Topics,
-    CommunityEventSummaryDto? LinkedEvent,
-    int HelpfulCount,
-    int CommentCount,
-    int SavedCount,
-    bool IsHelpful,
-    bool IsSaved,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
-
-public sealed record CommunityPostDetailDto(
-    CommunityPostDto Post,
-    CommunityCommentDto[] Comments);
-
-public sealed record CommunityCommentDto(
-    Guid Id,
-    Guid PostId,
-    string Body,
-    CommunityContentStatus Status,
-    CommunityAuthorDto Author,
-    int HelpfulCount,
-    bool IsHelpful,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
-
-public sealed record CommunityCreatePostDto(
-    CommunityPostType PostType,
-    string Title,
-    string Body,
-    Guid[] TopicIds,
-    Guid? LinkedEventId);
-
-public sealed record CommunityUpdatePostDto(
-    CommunityPostType PostType,
-    string Title,
-    string Body,
-    Guid[] TopicIds,
-    Guid? LinkedEventId);
-
-public sealed record CommunityCreateCommentDto(string Body);
-
-public sealed record CommunityReportRequestDto(
-    Guid? PostId,
-    Guid? CommentId,
-    CommunityReportReason Reason,
-    string? Description);
-
-public sealed record CommunityReportDto(
-    Guid Id,
-    CommunityReportReason Reason,
-    string? Description,
-    CommunityReportStatus Status,
-    CommunityPostDto? Post,
-    CommunityCommentDto? Comment,
-    CommunityAuthorDto Reporter,
-    CommunityAuthorDto? Reviewer,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset? ReviewedAt);
-
-public sealed record CommunityReviewReportDto(CommunityReportStatus Status);
 
 public sealed record CircleDto(
     Guid Id,
@@ -475,14 +396,6 @@ public sealed record CircleDto(
     CircleMemberRole? ViewerRole,
     bool CanManage,
     bool AllowAnonymousPosts);
-
-public sealed record CircleCreateDto(
-    string Name,
-    string Description,
-    WithinLens Lens,
-    CircleVisibility Visibility,
-    string? Rules = null,
-    bool AllowAnonymousPosts = false);
 
 public sealed record CircleUpdateDto(
     string Name,

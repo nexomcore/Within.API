@@ -19,13 +19,6 @@ public sealed class WithinDbContext(DbContextOptions<WithinDbContext> options) :
     public DbSet<Post> Posts => Set<Post>();
     public DbSet<Comment> Comments => Set<Comment>();
     public DbSet<Reaction> Reactions => Set<Reaction>();
-    public DbSet<CommunityPost> CommunityPosts => Set<CommunityPost>();
-    public DbSet<CommunityTopic> CommunityTopics => Set<CommunityTopic>();
-    public DbSet<CommunityPostTopic> CommunityPostTopics => Set<CommunityPostTopic>();
-    public DbSet<CommunityComment> CommunityComments => Set<CommunityComment>();
-    public DbSet<CommunityHelpfulReaction> CommunityHelpfulReactions => Set<CommunityHelpfulReaction>();
-    public DbSet<SavedCommunityPost> SavedCommunityPosts => Set<SavedCommunityPost>();
-    public DbSet<CommunityReport> CommunityReports => Set<CommunityReport>();
     public DbSet<Circle> Circles => Set<Circle>();
     public DbSet<CircleMember> CircleMembers => Set<CircleMember>();
     public DbSet<CircleJoinRequest> CircleJoinRequests => Set<CircleJoinRequest>();
@@ -216,59 +209,6 @@ public sealed class WithinDbContext(DbContextOptions<WithinDbContext> options) :
         modelBuilder.Entity<Comment>(entity =>
         {
             entity.HasIndex(item => item.ParentCommentId);
-        });
-
-        modelBuilder.Entity<CommunityPost>(entity =>
-        {
-            entity.HasIndex(item => new { item.Status, item.CreatedAt });
-            entity.HasIndex(item => item.LinkedEventId);
-            entity.HasIndex(item => item.UserId);
-            entity.Property(item => item.Title).HasMaxLength(120);
-            entity.Property(item => item.Body).HasMaxLength(3000);
-        });
-
-        modelBuilder.Entity<CommunityTopic>(entity =>
-        {
-            entity.HasIndex(item => item.Slug).IsUnique();
-            entity.Property(item => item.Name).HasMaxLength(80);
-            entity.Property(item => item.Slug).HasMaxLength(80);
-            entity.Property(item => item.Description).HasMaxLength(240);
-        });
-
-        modelBuilder.Entity<CommunityPostTopic>(entity =>
-        {
-            entity.HasKey(item => new { item.PostId, item.TopicId });
-            entity.HasIndex(item => item.TopicId);
-        });
-
-        modelBuilder.Entity<CommunityComment>(entity =>
-        {
-            entity.HasIndex(item => new { item.PostId, item.CreatedAt });
-            entity.HasIndex(item => item.UserId);
-            entity.Property(item => item.Body).HasMaxLength(1000);
-        });
-
-        modelBuilder.Entity<CommunityHelpfulReaction>(entity =>
-        {
-            entity.HasIndex(item => new { item.PostId, item.UserId })
-                .IsUnique()
-                .HasFilter("\"PostId\" IS NOT NULL");
-            entity.HasIndex(item => new { item.CommentId, item.UserId })
-                .IsUnique()
-                .HasFilter("\"CommentId\" IS NOT NULL");
-        });
-
-        modelBuilder.Entity<SavedCommunityPost>(entity =>
-        {
-            entity.HasIndex(item => new { item.PostId, item.UserId }).IsUnique();
-        });
-
-        modelBuilder.Entity<CommunityReport>(entity =>
-        {
-            entity.HasIndex(item => new { item.Status, item.CreatedAt });
-            entity.HasIndex(item => item.PostId);
-            entity.HasIndex(item => item.CommentId);
-            entity.Property(item => item.Description).HasMaxLength(1000);
         });
 
         modelBuilder.Entity<Circle>(entity =>

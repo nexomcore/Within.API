@@ -17,7 +17,6 @@ public static class EndpointRegistrationExtensions
         app.MapProviderEndpoints();
         app.MapEventEndpoints();
         app.MapCircleEndpoints();
-        app.MapCommunityEndpoints();
         app.MapPostEndpoints();
         app.MapNotificationEndpoints();
         app.MapWellbeingEndpoints();

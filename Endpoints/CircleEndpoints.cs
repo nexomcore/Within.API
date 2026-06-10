@@ -80,54 +80,7 @@ public static class CircleEndpoints
                 events));
         });
 
-        circles.MapPost("", async (CircleCreateDto request, WithinDbContext db, ClaimsPrincipal principal) =>
-        {
-            var userId = principal.UserId();
-            var validation = ValidateCircle(request.Name, request.Description);
-            if (validation is not null) return Results.BadRequest(new { message = validation });
-            if (request.Visibility == CircleVisibility.Hidden) return Results.BadRequest(new { message = "Hidden invite-only circles are not enabled yet." });
-
-            var now = DateTimeOffset.UtcNow;
-            var circle = new Circle
-            {
-                Id = Guid.NewGuid(),
-                Name = request.Name.Trim(),
-                Slug = await UniqueSlug(db, request.Name),
-                Description = request.Description.Trim(),
-                Rules = NormalizeOptional(request.Rules, 2000),
-                CreatedByUserId = userId,
-                Type = CircleType.PrivateSupport,
-                Visibility = request.Visibility,
-                PrivacyType = request.Visibility == CircleVisibility.Private ? CirclePrivacyType.ApprovalRequired : CirclePrivacyType.Open,
-                Status = CircleStatus.Active,
-                AllowAnonymousPosts = request.AllowAnonymousPosts,
-                Lens = request.Lens,
-                CreatedAt = now
-            };
-            db.Circles.Add(circle);
-            db.CircleMembers.Add(new CircleMember
-            {
-                Id = Guid.NewGuid(),
-                CircleId = circle.Id,
-                UserId = userId,
-                Role = CircleMemberRole.Admin,
-                Status = CircleMemberStatus.Active,
-                JoinedAt = now,
-                UpdatedAt = now
-            });
-            db.CircleRoles.Add(new CircleRole
-            {
-                Id = Guid.NewGuid(),
-                CircleId = circle.Id,
-                UserId = userId,
-                Role = CircleRoleKind.Admin,
-                AssignedByUserId = userId,
-                AssignedAt = now
-            });
-            AddIntroduceYourselfPost(db, circle, userId, now);
-            await db.SaveChangesAsync();
-            return Results.Created($"/api/circles/{circle.Id}", await ToCircleDto(db, circle, userId));
-        }).RequireAuthorization();
+        // Circles are created by admins only (see /api/admin/circles). Users join existing circles.
 
         circles.MapPut("/{circleId:guid}", async (Guid circleId, CircleUpdateDto request, WithinDbContext db, ClaimsPrincipal principal) =>
         {
@@ -1157,24 +1110,6 @@ public static class CircleEndpoints
         if (string.IsNullOrWhiteSpace(value)) return true;
         var lower = value.Trim().ToLowerInvariant();
         return lower.StartsWith("http://") || lower.StartsWith("https://") || lower.StartsWith("file://") || lower.StartsWith("data:image/");
-    }
-
-    private static void AddIntroduceYourselfPost(WithinDbContext db, Circle circle, Guid userId, DateTimeOffset now)
-    {
-        db.CircleThreads.Add(new CircleThread
-        {
-            Id = Guid.NewGuid(),
-            CircleId = circle.Id,
-            UserId = userId,
-            ThreadType = CommunityPostType.Reflection,
-            PostType = CirclePostType.System,
-            Title = "Introduce Yourself",
-            Body = "Welcome! Tell the circle a little about yourself:\n- What brought you here?\n- What are you hoping to learn or experience?\n- Where are you from?",
-            IsPinned = true,
-            Status = CommunityContentStatus.Active,
-            CreatedAt = now,
-            UpdatedAt = now
-        });
     }
 
     private static async Task AddWelcomePost(WithinDbContext db, Circle circle, Guid userId, DateTimeOffset now)
