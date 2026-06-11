@@ -907,46 +907,13 @@ public static class CircleEndpoints
             if (validation is not null) return Results.BadRequest(new { message = validation });
             if (request.Visibility == CircleVisibility.Hidden) return Results.BadRequest(new { message = "Hidden invite-only circles are not enabled yet." });
 
-            var now = DateTimeOffset.UtcNow;
-            var circle = new Circle
-            {
-                Id = Guid.NewGuid(),
-                Name = request.Name.Trim(),
-                Slug = await UniqueSlug(db, request.Name),
-                Description = request.Description.Trim(),
-                Rules = NormalizeOptional(request.Rules, 2000),
-                CreatedByUserId = userId,
-                Type = CircleType.Platform,
-                Visibility = request.Visibility,
-                PrivacyType = request.RequiresApproval ? CirclePrivacyType.ApprovalRequired : CirclePrivacyType.Open,
-                RequiresApproval = request.RequiresApproval,
-                Status = CircleStatus.Active,
-                Lens = request.Lens,
-                CreatedAt = now
-            };
-            db.Circles.Add(circle);
-            db.CircleMembers.Add(new CircleMember
-            {
-                Id = Guid.NewGuid(),
-                CircleId = circle.Id,
-                UserId = userId,
-                Role = CircleMemberRole.Admin,
-                Status = CircleMemberStatus.Active,
-                JoinedAt = now,
-                UpdatedAt = now
-            });
-            db.CircleRoles.Add(new CircleRole
-            {
-                Id = Guid.NewGuid(),
-                CircleId = circle.Id,
-                UserId = userId,
-                Role = CircleRoleKind.Admin,
-                AssignedByUserId = userId,
-                AssignedAt = now
-            });
+            var circle = await CreateOwnedCircle(db, request, userId);
             await db.SaveChangesAsync();
             return Results.Created($"/api/admin/circles/{circle.Id}", await ToCircleDto(db, circle, userId));
         });
+
+        admin.MapPut("/{circleId:guid}/admin", async (Guid circleId, SetCircleAdminDto request, WithinDbContext db, ClaimsPrincipal principal) =>
+            await AssignCircleAdmin(db, circleId, request.UserId, principal.UserId()));
 
         admin.MapPut("/{circleId:guid}", async (Guid circleId, AdminCircleUpdateDto request, WithinDbContext db, ClaimsPrincipal principal) =>
         {
@@ -1033,7 +1000,173 @@ public static class CircleEndpoints
             return Results.NoContent();
         });
 
+        // ---- Circle Admin portal: a circle admin manages only the circles they own. ----
+        var portal = app.MapGroup("/api/circle-admin/circles").RequireAuthorization("CircleAdminPortal");
+
+        portal.MapGet("", async (WithinDbContext db, ClaimsPrincipal principal) =>
+        {
+            var userId = principal.UserId();
+            var circles = await db.Circles
+                .Where(circle => circle.Status != CircleStatus.Archived
+                    && (db.CircleMembers.Any(m => m.CircleId == circle.Id && m.UserId == userId && m.Status == CircleMemberStatus.Active && m.Role == CircleMemberRole.Admin)
+                        || db.CircleRoles.Any(r => r.CircleId == circle.Id && r.UserId == userId && r.Role == CircleRoleKind.Admin)))
+                .OrderBy(circle => circle.Name)
+                .ToArrayAsync();
+            return Results.Ok(await ToCircleDtos(db, circles, userId));
+        });
+
+        portal.MapPost("", async (AdminCircleCreateDto request, WithinDbContext db, ClaimsPrincipal principal) =>
+        {
+            var userId = principal.UserId();
+            var validation = ValidateCircle(request.Name, request.Description);
+            if (validation is not null) return Results.BadRequest(new { message = validation });
+            if (request.Visibility == CircleVisibility.Hidden) return Results.BadRequest(new { message = "Hidden invite-only circles are not enabled yet." });
+
+            var circle = await CreateOwnedCircle(db, request, userId);
+            await db.SaveChangesAsync();
+            return Results.Created($"/api/circle-admin/circles/{circle.Id}", await ToCircleDto(db, circle, userId));
+        });
+
+        portal.MapPut("/{circleId:guid}", async (Guid circleId, AdminCircleUpdateDto request, WithinDbContext db, ClaimsPrincipal principal) =>
+        {
+            if (!await CanAdminCircle(db, principal, circleId)) return Results.Forbid();
+            var circle = await db.Circles.FindAsync(circleId);
+            if (circle is null) return Results.NotFound();
+            var validation = ValidateCircle(request.Name, request.Description);
+            if (validation is not null) return Results.BadRequest(new { message = validation });
+            if (request.Visibility == CircleVisibility.Hidden) return Results.BadRequest(new { message = "Hidden invite-only circles are not enabled yet." });
+
+            circle.Name = request.Name.Trim();
+            circle.Description = request.Description.Trim();
+            circle.Rules = NormalizeOptional(request.Rules, 2000);
+            circle.Lens = request.Lens;
+            circle.Visibility = request.Visibility;
+            circle.PrivacyType = request.RequiresApproval ? CirclePrivacyType.ApprovalRequired : CirclePrivacyType.Open;
+            circle.RequiresApproval = request.RequiresApproval;
+            circle.Status = request.Status;
+            await db.SaveChangesAsync();
+            return Results.Ok(await ToCircleDto(db, circle, principal.UserId()));
+        });
+
+        portal.MapGet("/{circleId:guid}/guidelines", async (Guid circleId, WithinDbContext db, ClaimsPrincipal principal) =>
+        {
+            if (!await CanAdminCircle(db, principal, circleId)) return Results.Forbid();
+            var guidelines = await db.CircleGuidelines
+                .Where(item => item.CircleId == circleId)
+                .OrderBy(item => item.SortOrder)
+                .Select(item => new AdminCircleGuidelineDto(item.Id, item.Title, item.Body, item.SortOrder, item.IsActive))
+                .ToArrayAsync();
+            return Results.Ok(guidelines);
+        });
+
+        portal.MapPost("/{circleId:guid}/guidelines", async (Guid circleId, CircleGuidelineRequest request, WithinDbContext db, ClaimsPrincipal principal) =>
+        {
+            if (!await CanAdminCircle(db, principal, circleId)) return Results.Forbid();
+            var validation = ValidateGuideline(request.Title, request.Body);
+            if (validation is not null) return Results.BadRequest(new { message = validation });
+            var guideline = new CircleGuideline { Id = Guid.NewGuid(), CircleId = circleId, Title = request.Title.Trim(), Body = request.Body.Trim(), SortOrder = request.SortOrder, IsActive = true };
+            db.CircleGuidelines.Add(guideline);
+            await db.SaveChangesAsync();
+            return Results.Created($"/api/circle-admin/circles/{circleId}/guidelines/{guideline.Id}",
+                new AdminCircleGuidelineDto(guideline.Id, guideline.Title, guideline.Body, guideline.SortOrder, guideline.IsActive));
+        });
+
+        portal.MapPut("/{circleId:guid}/guidelines/{guidelineId:guid}", async (Guid circleId, Guid guidelineId, CircleGuidelineUpdateRequest request, WithinDbContext db, ClaimsPrincipal principal) =>
+        {
+            if (!await CanAdminCircle(db, principal, circleId)) return Results.Forbid();
+            var guideline = await db.CircleGuidelines.FirstOrDefaultAsync(item => item.Id == guidelineId && item.CircleId == circleId);
+            if (guideline is null) return Results.NotFound();
+            var validation = ValidateGuideline(request.Title, request.Body);
+            if (validation is not null) return Results.BadRequest(new { message = validation });
+            guideline.Title = request.Title.Trim();
+            guideline.Body = request.Body.Trim();
+            guideline.SortOrder = request.SortOrder;
+            guideline.IsActive = request.IsActive;
+            await db.SaveChangesAsync();
+            return Results.Ok(new AdminCircleGuidelineDto(guideline.Id, guideline.Title, guideline.Body, guideline.SortOrder, guideline.IsActive));
+        });
+
+        portal.MapDelete("/{circleId:guid}/guidelines/{guidelineId:guid}", async (Guid circleId, Guid guidelineId, WithinDbContext db, ClaimsPrincipal principal) =>
+        {
+            if (!await CanAdminCircle(db, principal, circleId)) return Results.Forbid();
+            var guideline = await db.CircleGuidelines.FirstOrDefaultAsync(item => item.Id == guidelineId && item.CircleId == circleId);
+            if (guideline is null) return Results.NotFound();
+            db.CircleGuidelines.Remove(guideline);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
+        portal.MapGet("/{circleId:guid}/insights", async (Guid circleId, WithinDbContext db, ClaimsPrincipal principal) =>
+        {
+            if (!await CanAdminCircle(db, principal, circleId)) return Results.Forbid();
+            if (!await db.Circles.AnyAsync(item => item.Id == circleId)) return Results.NotFound();
+            return Results.Ok(await BuildCircleInsights(db, circleId));
+        });
+
         return app;
+    }
+
+    private static async Task<CircleInsightsDto> BuildCircleInsights(WithinDbContext db, Guid circleId)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var since30 = now.AddDays(-30);
+        var since14 = now.AddDays(-14);
+
+        var threadIds = db.CircleThreads.Where(t => t.CircleId == circleId && t.Status == CommunityContentStatus.Active).Select(t => t.Id);
+        var commentIds = db.CircleThreadComments.Where(c => threadIds.Contains(c.ThreadId) && c.Status == CommunityContentStatus.Active).Select(c => c.Id);
+        var pollIds = db.CirclePolls.Where(p => threadIds.Contains(p.ThreadId)).Select(p => p.Id);
+
+        var memberCount = await db.CircleMembers.CountAsync(m => m.CircleId == circleId && m.Status == CircleMemberStatus.Active);
+        var newMembers = await db.CircleMembers.CountAsync(m => m.CircleId == circleId && m.Status == CircleMemberStatus.Active && m.JoinedAt >= since14);
+        var pendingRequests = await db.CircleJoinRequests.CountAsync(r => r.CircleId == circleId && r.Status == CircleJoinRequestStatus.Pending);
+        var threadCount = await threadIds.CountAsync();
+        var totalComments = await commentIds.CountAsync();
+        var totalReactions = await db.CircleReactions.CountAsync(r => (r.ThreadId != null && threadIds.Contains(r.ThreadId.Value)) || (r.CommentId != null && commentIds.Contains(r.CommentId.Value)));
+        var totalHelpful = await db.CircleHelpfulReactions.CountAsync(r => (r.ThreadId != null && threadIds.Contains(r.ThreadId.Value)) || (r.CommentId != null && commentIds.Contains(r.CommentId.Value)));
+        var pollVotes = await db.CirclePollVotes.CountAsync(v => pollIds.Contains(v.PollId));
+
+        var activeThreadAuthors = db.CircleThreads.Where(t => t.CircleId == circleId && t.CreatedAt >= since30).Select(t => t.UserId);
+        var activeCommentAuthors = db.CircleThreadComments.Where(c => threadIds.Contains(c.ThreadId) && c.CreatedAt >= since30).Select(c => c.UserId);
+        var activeMembers = await activeThreadAuthors.Union(activeCommentAuthors).Distinct().CountAsync();
+
+        var threadAuthors = await db.CircleThreads.Where(t => t.CircleId == circleId && t.Status == CommunityContentStatus.Active && !t.IsAnonymous).Select(t => t.UserId).ToListAsync();
+        var commentAuthors = await db.CircleThreadComments.Where(c => threadIds.Contains(c.ThreadId) && c.Status == CommunityContentStatus.Active && !c.IsAnonymous).Select(c => c.UserId).ToListAsync();
+        var topRaw = threadAuthors.Concat(commentAuthors)
+            .GroupBy(id => id)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(5)
+            .ToList();
+        var contributors = new List<CircleTopContributorDto>(topRaw.Count);
+        foreach (var entry in topRaw)
+        {
+            var name = await db.Users.Where(u => u.Id == entry.UserId).Select(u => u.DisplayName).FirstOrDefaultAsync() ?? "Member";
+            contributors.Add(new CircleTopContributorDto(entry.UserId, name, entry.Count));
+        }
+
+        CircleMoodSplitDto? mood = null;
+        var latestCheckInId = await db.CircleThreads
+            .Where(t => t.CircleId == circleId && t.PostType == CirclePostType.WeeklyCheckIn)
+            .OrderByDescending(t => t.CreatedAt)
+            .Select(t => (Guid?)t.Id)
+            .FirstOrDefaultAsync();
+        if (latestCheckInId is Guid checkInThreadId)
+        {
+            var counts = await db.CircleWeeklyCheckInResponses
+                .Where(r => r.ThreadId == checkInThreadId)
+                .GroupBy(r => r.Mood)
+                .Select(g => new { Mood = g.Key, Count = g.Count() })
+                .ToListAsync();
+            int Count(WeeklyCheckInMood m) => counts.FirstOrDefault(c => c.Mood == m)?.Count ?? 0;
+            mood = new CircleMoodSplitDto(
+                Count(WeeklyCheckInMood.Great),
+                Count(WeeklyCheckInMood.Good),
+                Count(WeeklyCheckInMood.Okay),
+                Count(WeeklyCheckInMood.Struggling),
+                counts.Sum(c => c.Count));
+        }
+
+        return new CircleInsightsDto(memberCount, newMembers, activeMembers, pendingRequests, threadCount, totalComments, totalReactions, totalHelpful, pollVotes, mood, contributors.ToArray());
     }
 
     private static string? ValidateGuideline(string title, string body)
@@ -1205,6 +1338,78 @@ public static class CircleEndpoints
         {
             db.CirclePollOptions.Add(new CirclePollOption { Id = Guid.NewGuid(), PollId = entity.Id, Text = option, SortOrder = order++ });
         }
+    }
+
+    // Creates a platform circle owned by ownerUserId (admin member + admin role). Caller saves.
+    private static async Task<Circle> CreateOwnedCircle(WithinDbContext db, AdminCircleCreateDto request, Guid ownerUserId)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var circle = new Circle
+        {
+            Id = Guid.NewGuid(),
+            Name = request.Name.Trim(),
+            Slug = await UniqueSlug(db, request.Name),
+            Description = request.Description.Trim(),
+            Rules = NormalizeOptional(request.Rules, 2000),
+            CreatedByUserId = ownerUserId,
+            Type = CircleType.Platform,
+            Visibility = request.Visibility,
+            PrivacyType = request.RequiresApproval ? CirclePrivacyType.ApprovalRequired : CirclePrivacyType.Open,
+            RequiresApproval = request.RequiresApproval,
+            Status = CircleStatus.Active,
+            Lens = request.Lens,
+            CreatedAt = now
+        };
+        db.Circles.Add(circle);
+        db.CircleMembers.Add(new CircleMember
+        {
+            Id = Guid.NewGuid(),
+            CircleId = circle.Id,
+            UserId = ownerUserId,
+            Role = CircleMemberRole.Admin,
+            Status = CircleMemberStatus.Active,
+            JoinedAt = now,
+            UpdatedAt = now
+        });
+        db.CircleRoles.Add(new CircleRole
+        {
+            Id = Guid.NewGuid(),
+            CircleId = circle.Id,
+            UserId = ownerUserId,
+            Role = CircleRoleKind.Admin,
+            AssignedByUserId = ownerUserId,
+            AssignedAt = now
+        });
+        return circle;
+    }
+
+    // Admin-portal action: make targetUserId the admin of a circle (membership + role), and
+    // raise their platform role to Circle Admin if they were just a member.
+    private static async Task<IResult> AssignCircleAdmin(WithinDbContext db, Guid circleId, Guid targetUserId, Guid assignedByUserId)
+    {
+        var circle = await db.Circles.FindAsync(circleId);
+        if (circle is null) return Results.NotFound();
+        var user = await db.Users.FirstOrDefaultAsync(item => item.Id == targetUserId && !item.IsDeleted);
+        if (user is null) return Results.NotFound(new { message = "User not found." });
+
+        var now = DateTimeOffset.UtcNow;
+        var member = await db.CircleMembers.FirstOrDefaultAsync(item => item.CircleId == circleId && item.UserId == targetUserId);
+        if (member is null)
+        {
+            member = new CircleMember { Id = Guid.NewGuid(), CircleId = circleId, UserId = targetUserId, JoinedAt = now };
+            db.CircleMembers.Add(member);
+        }
+        member.Role = CircleMemberRole.Admin;
+        member.Status = CircleMemberStatus.Active;
+        member.LeftAt = null;
+        member.UpdatedAt = now;
+        await SyncCircleRole(db, circleId, targetUserId, CircleMemberRole.Admin, assignedByUserId);
+
+        // Grant portal access; never downgrade an existing Provider/Admin.
+        if (user.RoleId == RoleCatalog.UserRoleId) user.RoleId = RoleCatalog.CircleAdminRoleId;
+
+        await db.SaveChangesAsync();
+        return Results.NoContent();
     }
 
     private static async Task SyncCircleRole(WithinDbContext db, Guid circleId, Guid userId, CircleMemberRole role, Guid assignedByUserId)
@@ -1665,8 +1870,8 @@ public static class CircleEndpoints
     {
         var user = await db.Users.FindAsync(userId);
         if (user is null) return new CommunityAuthorDto(userId, "Unknown user", WithinRole.User, false);
-        var verified = user.Role == WithinRole.Provider && await db.Providers.AnyAsync(item => item.OwnerUserId == userId && item.IsVerified);
-        return new CommunityAuthorDto(user.Id, user.DisplayName, user.Role, verified);
+        var verified = user.RoleEnum == WithinRole.Provider && await db.Providers.AnyAsync(item => item.OwnerUserId == userId && item.IsVerified);
+        return new CommunityAuthorDto(user.Id, user.DisplayName, user.RoleEnum, verified);
     }
 
     /// <summary>
@@ -1687,8 +1892,8 @@ public static class CircleEndpoints
 
         if (identity.IdentityMode == CircleIdentityMode.RealProfile && user is not null)
         {
-            var verified = user.Role == WithinRole.Provider && await db.Providers.AnyAsync(item => item.OwnerUserId == user.Id && item.IsVerified);
-            return (new CommunityAuthorDto(user.Id, user.DisplayName, user.Role, verified), identity.IdentityMode);
+            var verified = user.RoleEnum == WithinRole.Provider && await db.Providers.AnyAsync(item => item.OwnerUserId == user.Id && item.IsVerified);
+            return (new CommunityAuthorDto(user.Id, user.DisplayName, user.RoleEnum, verified), identity.IdentityMode);
         }
 
         return (new CommunityAuthorDto(Guid.Empty, identity.DisplayName, WithinRole.User, false), identity.IdentityMode);

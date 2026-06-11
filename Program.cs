@@ -94,6 +94,7 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("AdminOnly", policy => policy.RequireRole(nameof(WithinRole.Admin)));
     options.AddPolicy("ProviderOnly", policy => policy.RequireRole(nameof(WithinRole.Provider)));
+    options.AddPolicy("CircleAdminPortal", policy => policy.RequireRole(nameof(WithinRole.CircleAdmin), nameof(WithinRole.Admin)));
 });
 
 var app = builder.Build();

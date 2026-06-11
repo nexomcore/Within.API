@@ -20,6 +20,7 @@ public static class WithinSeedData
         var mayaProviderId = Guid.Parse("14141414-1414-1414-1414-141414141414");
         var ariProviderId = Guid.Parse("15151515-1515-1515-1515-151515151515");
 
+        await UpsertRoles(db);
         await UpsertUser(db, User.Seed(demoUserId, "Demo User", "demo@within.local", WithinRole.User, now));
         await UpsertUser(db, User.Seed(trackOwnerId, "TheTrack Provider", "provider@thetrack.local", WithinRole.Provider, now));
         await UpsertUser(db, User.Seed(pranaOwnerId, "Prana Provider", "provider@prana.local", WithinRole.Provider, now));
@@ -448,6 +449,26 @@ public static class WithinSeedData
         await db.SaveChangesAsync();
     }
 
+    private static async Task UpsertRoles(WithinDbContext db)
+    {
+        foreach (var role in RoleCatalog.SeedRows())
+        {
+            var existing = await db.Roles.FindAsync(role.Id);
+            if (existing is null)
+            {
+                db.Roles.Add(role);
+            }
+            else
+            {
+                existing.Key = role.Key;
+                existing.Name = role.Name;
+                existing.Rank = role.Rank;
+                existing.Description = role.Description;
+            }
+        }
+        await db.SaveChangesAsync();
+    }
+
     private static async Task UpsertUser(WithinDbContext db, User seed)
     {
         var existing = await db.Users.FindAsync(seed.Id);
@@ -463,7 +484,7 @@ public static class WithinSeedData
             return;
         }
 
-        existing.Role = seed.Role;
+        existing.RoleId = seed.RoleId;
         existing.DisplayName = seed.DisplayName;
         existing.Email = seed.Email;
         existing.PasswordHash = seed.PasswordHash;

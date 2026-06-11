@@ -128,7 +128,7 @@ public static class ProviderApplicationEndpoints
                         DisplayName = application.ContactName,
                         Email = email,
                         PasswordHash = Passwords.Hash(temporaryPassword),
-                        Role = WithinRole.Provider,
+                        RoleId = RoleCatalog.ProviderRoleId,
                         PreferredLens = application.PrimaryLens,
                         CreatedUtc = DateTimeOffset.UtcNow
                     };
@@ -138,7 +138,7 @@ public static class ProviderApplicationEndpoints
                 {
                     user.DisplayName = string.IsNullOrWhiteSpace(user.DisplayName) ? application.ContactName : user.DisplayName;
                     user.PasswordHash = Passwords.Hash(temporaryPassword);
-                    user.Role = WithinRole.Provider;
+                    user.RoleId = RoleCatalog.ProviderRoleId;
                     user.PreferredLens = application.PrimaryLens;
                 }
 

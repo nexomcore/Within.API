@@ -38,7 +38,7 @@ public sealed class AuthTokenService(IConfiguration configuration, WithinDbConte
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Email, user.Email),
             new Claim(ClaimTypes.Name, user.DisplayName),
-            new Claim(ClaimTypes.Role, user.Role.ToString())
+            new Claim(ClaimTypes.Role, user.RoleEnum.ToString())
         };
         var token = new JwtSecurityToken(
             configuration["Jwt:Issuer"],

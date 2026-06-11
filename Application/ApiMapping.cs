@@ -82,7 +82,7 @@ public static class ApiMapping
     public static Guid? TryUserId(this ClaimsPrincipal principal) =>
         Guid.TryParse(principal.FindFirstValue(ClaimTypes.NameIdentifier), out var userId) ? userId : null;
 
-    public static UserSummaryDto ToDto(this User user) => new(user.Id, user.DisplayName, user.Email, user.Role, user.PreferredLens);
+    public static UserSummaryDto ToDto(this User user) => new(user.Id, user.DisplayName, user.Email, user.RoleEnum, user.PreferredLens);
 
     public static DailyCheckInDto ToDto(this DailyCheckIn checkIn) => new()
     {

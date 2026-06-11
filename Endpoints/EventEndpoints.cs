@@ -409,7 +409,7 @@ public static class EventEndpoints
     {
         var user = await db.Users.FindAsync(userId);
         if (user is null) return new CommunityAuthorDto(userId, "Within user", WithinRole.User, false);
-        var verified = user.Role == WithinRole.Provider && await db.Providers.AnyAsync(item => item.OwnerUserId == userId && item.IsVerified);
-        return new CommunityAuthorDto(user.Id, user.DisplayName, user.Role, verified);
+        var verified = user.RoleEnum == WithinRole.Provider && await db.Providers.AnyAsync(item => item.OwnerUserId == userId && item.IsVerified);
+        return new CommunityAuthorDto(user.Id, user.DisplayName, user.RoleEnum, verified);
     }
 }

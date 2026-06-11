@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace WithinAPI.Models;
 
-public sealed record RegisterDto(string Email, string Password, string? DisplayName = null, WithinRole Role = WithinRole.User);
+public sealed record RegisterDto(string Email, string Password, string? DisplayName = null);
 
 public sealed record LoginDto(string Email, string Password);
 
@@ -824,3 +824,26 @@ public sealed record AdminUserDto(
     string Email,
     WithinRole Role,
     DateTimeOffset CreatedUtc);
+
+public sealed record RoleDto(string Key, string Name, int Rank, string Description);
+
+public sealed record UpdateUserRoleDto(WithinRole Role);
+
+public sealed record SetCircleAdminDto(Guid UserId);
+
+public sealed record CircleInsightsDto(
+    int MemberCount,
+    int NewMembers14d,
+    int ActiveMembers30d,
+    int PendingJoinRequests,
+    int ThreadCount,
+    int TotalComments,
+    int TotalReactions,
+    int TotalHelpful,
+    int PollVotes,
+    CircleMoodSplitDto? LatestCheckIn,
+    CircleTopContributorDto[] TopContributors);
+
+public sealed record CircleMoodSplitDto(int Great, int Good, int Okay, int Struggling, int Total);
+
+public sealed record CircleTopContributorDto(Guid UserId, string DisplayName, int Contributions);

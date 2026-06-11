@@ -84,12 +84,12 @@ public sealed class MarketFitSubmissionService(WithinDbContext db) : IMarketFitS
             .FirstOrDefaultAsync(cancellationToken);
 
         var userTotals = await db.Users
-            .GroupBy(item => item.Role)
-            .Select(group => new { Role = group.Key, Count = group.Count() })
+            .GroupBy(item => item.RoleId)
+            .Select(group => new { RoleId = group.Key, Count = group.Count() })
             .ToArrayAsync(cancellationToken);
         var totalUsers = userTotals.Sum(item => item.Count);
-        var providerUsers = userTotals.FirstOrDefault(item => item.Role == WithinRole.Provider)?.Count ?? 0;
-        var adminUsers = userTotals.FirstOrDefault(item => item.Role == WithinRole.Admin)?.Count ?? 0;
+        var providerUsers = userTotals.FirstOrDefault(item => item.RoleId == RoleCatalog.ProviderRoleId)?.Count ?? 0;
+        var adminUsers = userTotals.FirstOrDefault(item => item.RoleId == RoleCatalog.AdminRoleId)?.Count ?? 0;
 
         return new AdminStatsDto(total, userCount, providerCount, totalUsers, providerUsers, adminUsers, latest);
     }

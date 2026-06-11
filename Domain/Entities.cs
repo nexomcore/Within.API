@@ -4,7 +4,19 @@ public enum WithinRole
 {
     User,
     Provider,
-    Admin
+    Admin,
+    CircleAdmin
+}
+
+// Normalized platform-role lookup. The WithinRole enum stays as a code-level convenience;
+// User.RoleId is a FK into this table (see RoleCatalog for the fixed ids/keys).
+public sealed class Role
+{
+    public Guid Id { get; set; }
+    public string Key { get; set; } = "";
+    public string Name { get; set; } = "";
+    public int Rank { get; set; }
+    public string Description { get; set; } = "";
 }
 
 public enum WithinLens
@@ -383,11 +395,13 @@ public sealed class User
     public string DisplayName { get; set; } = "";
     public string Email { get; set; } = "";
     public string PasswordHash { get; set; } = "";
-    public WithinRole Role { get; set; }
+    public Guid RoleId { get; set; } = RoleCatalog.IdFor(WithinRole.User);
     public WithinLens PreferredLens { get; set; } = WithinLens.Feel;
     public DateTimeOffset CreatedUtc { get; set; }
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedUtc { get; set; }
+
+    public WithinRole RoleEnum => RoleCatalog.RoleOf(RoleId);
 
     public static User Seed(Guid id, string name, string email, WithinRole role, DateTimeOffset createdUtc) => new()
     {
@@ -395,7 +409,7 @@ public sealed class User
         DisplayName = name,
         Email = email,
         PasswordHash = "pbkdf2:AQIDBAUGBwgJCgsMDQ4PEA==:+8XHFlhvxuo21D9qorz3lLT5BMobw/7nT57cxsiviS8=",
-        Role = role,
+        RoleId = RoleCatalog.IdFor(role),
         CreatedUtc = createdUtc
     };
 }

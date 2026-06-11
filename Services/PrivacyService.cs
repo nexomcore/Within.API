@@ -89,7 +89,7 @@ public sealed class PrivacyService(WithinDbContext db)
         if (viewerUserId == rsvp.UserId) return true;
         var provider = await db.Providers.FindAsync(evt.ProviderId);
         var viewer = await db.Users.FindAsync(viewerUserId);
-        var isPrivileged = viewer?.Role == WithinRole.Admin || provider?.OwnerUserId == viewerUserId;
+        var isPrivileged = viewer?.RoleEnum == WithinRole.Admin || provider?.OwnerUserId == viewerUserId;
 
         return ProfileAccessRules.CanViewRsvp(
             isPrivileged,
@@ -139,7 +139,7 @@ public sealed class PrivacyService(WithinDbContext db)
         var isMember = await IsCircleMember(circleId, viewerUserId);
         var isModerator = await db.CircleRoles.AnyAsync(item => item.CircleId == circleId && item.UserId == viewerUserId);
         var viewer = await db.Users.FindAsync(viewerUserId);
-        var isPrivileged = viewer?.Role == WithinRole.Admin || isModerator;
+        var isPrivileged = viewer?.RoleEnum == WithinRole.Admin || isModerator;
 
         return ProfileAccessRules.CanViewCircleMember(isPrivileged, circle.MemberListVisibility, isMember);
     }

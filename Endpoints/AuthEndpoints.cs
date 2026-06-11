@@ -26,7 +26,7 @@ public static class AuthEndpoints
                 DisplayName = ResolveInitialDisplayName(request.DisplayName, email),
                 Email = email,
                 PasswordHash = Passwords.Hash(request.Password),
-                Role = request.Role,
+                RoleId = RoleCatalog.UserRoleId,
                 CreatedUtc = DateTimeOffset.UtcNow
             };
 

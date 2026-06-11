@@ -22,9 +22,9 @@ public static class AdminEndpoints
                 return Results.Unauthorized();
             }
 
-            if (user.Role != WithinRole.Admin)
+            if (user.RoleEnum != WithinRole.Admin && user.RoleEnum != WithinRole.CircleAdmin)
             {
-                return Results.Json(new { message = "Admin access required." }, statusCode: StatusCodes.Status403Forbidden);
+                return Results.Json(new { message = "Admin or Circle Admin access required." }, statusCode: StatusCodes.Status403Forbidden);
             }
 
             return Results.Ok(await tokens.CreateResponse(user));
@@ -38,11 +38,41 @@ public static class AdminEndpoints
 
         admin.MapGet("/users", async (WithinDbContext db) =>
         {
-            var users = await db.Users
+            var rows = await db.Users
                 .OrderByDescending(item => item.CreatedUtc)
-                .Select(item => new AdminUserDto(item.Id, item.DisplayName, item.Email, item.Role, item.CreatedUtc))
+                .Select(item => new { item.Id, item.DisplayName, item.Email, item.RoleId, item.CreatedUtc })
                 .ToArrayAsync();
+            var users = rows
+                .Select(item => new AdminUserDto(item.Id, item.DisplayName, item.Email, RoleCatalog.RoleOf(item.RoleId), item.CreatedUtc))
+                .ToArray();
             return Results.Ok(users);
+        }).RequireAuthorization("AdminOnly");
+
+        admin.MapGet("/roles", async (WithinDbContext db) =>
+            Results.Ok(await db.Roles
+                .OrderBy(item => item.Rank)
+                .Select(item => new RoleDto(item.Key, item.Name, item.Rank, item.Description))
+                .ToArrayAsync())).RequireAuthorization("AdminOnly");
+
+        admin.MapPut("/users/{id:guid}/role", async (Guid id, UpdateUserRoleDto request, WithinDbContext db) =>
+        {
+            var user = await db.Users.FirstOrDefaultAsync(item => item.Id == id);
+            if (user is null || user.IsDeleted) return Results.NotFound();
+
+            var newRoleId = RoleCatalog.IdFor(request.Role);
+            // Don't strand the platform without an admin.
+            if (user.RoleId == RoleCatalog.AdminRoleId && newRoleId != RoleCatalog.AdminRoleId)
+            {
+                var activeAdmins = await db.Users.CountAsync(item => item.RoleId == RoleCatalog.AdminRoleId && !item.IsDeleted);
+                if (activeAdmins <= 1)
+                {
+                    return Results.Json(new { message = "Assign another admin before changing the last admin's role." }, statusCode: StatusCodes.Status409Conflict);
+                }
+            }
+
+            user.RoleId = newRoleId;
+            await db.SaveChangesAsync();
+            return Results.Ok(new AdminUserDto(user.Id, user.DisplayName, user.Email, user.RoleEnum, user.CreatedUtc));
         }).RequireAuthorization("AdminOnly");
 
         admin.MapDelete("/submissions/{id:guid}", async (Guid id, IMarketFitSubmissionService service, CancellationToken cancellationToken) =>
@@ -52,9 +82,9 @@ public static class AdminEndpoints
         {
             var user = await db.Users.FirstOrDefaultAsync(item => item.Id == id);
             if (user is null || user.IsDeleted) return Results.NotFound();
-            if (user.Role == WithinRole.Admin)
+            if (user.RoleId == RoleCatalog.AdminRoleId)
             {
-                var activeAdmins = await db.Users.CountAsync(item => item.Role == WithinRole.Admin && !item.IsDeleted);
+                var activeAdmins = await db.Users.CountAsync(item => item.RoleId == RoleCatalog.AdminRoleId && !item.IsDeleted);
                 if (activeAdmins <= 1)
                 {
                     return Results.Json(new { message = "Cannot delete the last remaining admin account." }, statusCode: StatusCodes.Status409Conflict);
@@ -75,9 +105,9 @@ public static class AdminEndpoints
         {
             var user = await db.Users.FirstOrDefaultAsync(item => item.Id == id);
             if (user is null) return Results.NotFound();
-            if (user.Role == WithinRole.Admin)
+            if (user.RoleId == RoleCatalog.AdminRoleId)
             {
-                var activeAdmins = await db.Users.CountAsync(item => item.Role == WithinRole.Admin && !item.IsDeleted);
+                var activeAdmins = await db.Users.CountAsync(item => item.RoleId == RoleCatalog.AdminRoleId && !item.IsDeleted);
                 if (activeAdmins <= 1)
                 {
                     return Results.Json(new { message = "Cannot purge the last remaining admin account." }, statusCode: StatusCodes.Status409Conflict);

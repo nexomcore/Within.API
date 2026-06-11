@@ -27,7 +27,7 @@ public static class AdminBootstrap
                 DisplayName = string.IsNullOrWhiteSpace(displayName) ? "Within Admin" : displayName,
                 Email = email,
                 PasswordHash = Passwords.Hash(password),
-                Role = WithinRole.Admin,
+                RoleId = RoleCatalog.AdminRoleId,
                 CreatedUtc = DateTimeOffset.UtcNow
             });
 
@@ -36,9 +36,9 @@ public static class AdminBootstrap
         }
 
         var changed = false;
-        if (user.Role != WithinRole.Admin)
+        if (user.RoleId != RoleCatalog.AdminRoleId)
         {
-            user.Role = WithinRole.Admin;
+            user.RoleId = RoleCatalog.AdminRoleId;
             changed = true;
         }
 

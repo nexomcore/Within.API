@@ -38,7 +38,7 @@ public static class UserEndpoints
                 response.Add(new UserSearchResultDto(
                     user.Id,
                     user.DisplayName,
-                    user.Role,
+                    user.RoleEnum,
                     connection?.Status,
                     connection?.RequesterUserId == currentUserId));
             }

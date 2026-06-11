@@ -8,6 +8,7 @@ public sealed class WithinDbContext(DbContextOptions<WithinDbContext> options) :
     public const string Schema = "within";
 
     public DbSet<User> Users => Set<User>();
+    public DbSet<Role> Roles => Set<Role>();
     public DbSet<Provider> Providers => Set<Provider>();
     public DbSet<ProviderService> ProviderServices => Set<ProviderService>();
     public DbSet<ProviderApplication> ProviderApplications => Set<ProviderApplication>();
@@ -107,9 +108,18 @@ public sealed class WithinDbContext(DbContextOptions<WithinDbContext> options) :
         modelBuilder.HasPostgresEnum<UserReportStatus>();
         modelBuilder.HasPostgresEnum<UserReportReason>();
 
+        modelBuilder.Entity<Role>(entity =>
+        {
+            entity.HasIndex(item => item.Key).IsUnique();
+            entity.Property(item => item.Key).HasMaxLength(40);
+            entity.Property(item => item.Name).HasMaxLength(80);
+            entity.Property(item => item.Description).HasMaxLength(240);
+        });
+
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasIndex(item => item.Email).IsUnique();
+            entity.HasIndex(item => item.RoleId);
             entity.Property(item => item.Email).HasMaxLength(320);
             entity.Property(item => item.DisplayName).HasMaxLength(160);
         });
