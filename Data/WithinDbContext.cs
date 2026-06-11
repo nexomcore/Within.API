@@ -199,6 +199,13 @@ public sealed class WithinDbContext(DbContextOptions<WithinDbContext> options) :
             entity.Property(item => item.BringNotes).HasMaxLength(1000);
             entity.Property(item => item.FoodNotes).HasMaxLength(1000);
             entity.Property(item => item.SafetyNotes).HasMaxLength(1500);
+            entity.Property(item => item.EventType).HasMaxLength(40).HasDefaultValue("class");
+            entity.Property(item => item.RetreatDuration).HasMaxLength(120);
+            entity.Property(item => item.RetreatFocus).HasMaxLength(60);
+            entity.Property(item => item.DifficultyLevel).HasMaxLength(40);
+            entity.Property(item => item.WhatsIncluded).HasMaxLength(2000);
+            entity.Property(item => item.WhatToBring).HasMaxLength(2000);
+            entity.Property(item => item.FacilitiesAvailable).HasColumnType("text[]").HasDefaultValue(Array.Empty<string>());
         });
 
         modelBuilder.Entity<EventRegistration>(entity =>

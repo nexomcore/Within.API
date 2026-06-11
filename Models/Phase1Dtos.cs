@@ -228,6 +228,7 @@ public sealed record EventDto(
     ProviderServiceDto? ProviderService,
     string Title,
     string Description,
+    string EventType,
     WithinLens Lens,
     string LocationName,
     bool IsOnline,
@@ -258,7 +259,16 @@ public sealed record EventDto(
     string[] DietaryOptions,
     string? FoodNotes,
     string? AgeRestriction,
-    string? SafetyNotes);
+    string? SafetyNotes,
+    string? RetreatDuration,
+    bool AccommodationIncluded,
+    bool MealsIncluded,
+    bool TransportIncluded,
+    string? RetreatFocus,
+    string? DifficultyLevel,
+    string? WhatsIncluded,
+    string? WhatToBring,
+    string[] FacilitiesAvailable);
 
 public sealed record ProviderEventEngagementDto(
     Guid EventId,
@@ -284,7 +294,8 @@ public sealed record EventFilterDto(
     bool? Weekend,
     string? Search,
     string? Tag,
-    Guid? ProviderId);
+    Guid? ProviderId,
+    string? Type = null);
 
 public sealed record UpsertEventDto(
     string Title,
@@ -315,7 +326,17 @@ public sealed record UpsertEventDto(
     string[]? DietaryOptions = null,
     string? FoodNotes = null,
     string? AgeRestriction = null,
-    string? SafetyNotes = null);
+    string? SafetyNotes = null,
+    string? EventType = null,
+    string? RetreatDuration = null,
+    bool AccommodationIncluded = false,
+    bool MealsIncluded = false,
+    bool TransportIncluded = false,
+    string? RetreatFocus = null,
+    string? DifficultyLevel = null,
+    string? WhatsIncluded = null,
+    string? WhatToBring = null,
+    string[]? FacilitiesAvailable = null);
 
 public sealed record JoinEventDto(EventJoinState State);
 

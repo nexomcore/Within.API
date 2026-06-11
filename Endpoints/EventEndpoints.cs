@@ -23,7 +23,8 @@ public static class EventEndpoints
             bool? weekend,
             string? search,
             string? tag,
-            Guid? providerId) =>
+            Guid? providerId,
+            string? type) =>
         {
             var userId = principal.TryUserId();
             var query = db.Events.Where(item => item.Status == EventStatus.Published);
@@ -34,6 +35,11 @@ public static class EventEndpoints
             if (!string.IsNullOrWhiteSpace(search)) query = query.Where(item => item.Title.ToLower().Contains(search.Trim().ToLower()));
             if (!string.IsNullOrWhiteSpace(tag)) query = query.Where(item => item.Tags.Contains(tag.Trim().ToLower()));
             if (providerId is not null) query = query.Where(item => item.ProviderId == providerId);
+            if (!string.IsNullOrWhiteSpace(type))
+            {
+                var normalizedType = type.Trim().ToLower();
+                query = query.Where(item => item.EventType == normalizedType);
+            }
             return Results.Ok(await ApiMapping.ProjectEvents(query.OrderBy(item => item.StartUtc), db, userId).ToArrayAsync());
         });
 

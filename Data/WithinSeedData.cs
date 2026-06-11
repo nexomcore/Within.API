@@ -168,6 +168,7 @@ public static class WithinSeedData
         var breathworkId = Guid.Parse("18181818-1818-1818-1818-181818181818");
         var moonId = Guid.Parse("19191919-1919-1919-1919-191919191919");
         var healingId = Guid.Parse("20202020-2020-2020-2020-202020202020");
+        var retreatId = Guid.Parse("24242424-2424-2424-2424-242424242424");
 
         var events = new[]
         {
@@ -353,6 +354,36 @@ public static class WithinSeedData
                 Status = EventStatus.Published,
                 Tags = ["healing", "workshop", "grounding", "paid"],
                 CreatedUtc = now
+            },
+            new Event
+            {
+                Id = retreatId,
+                ProviderId = pranaProviderId,
+                Title = "Margaret River Stillness Retreat",
+                Description = "A three-day immersive retreat in the forest: daily meditation and yoga, nourishing plant-based meals, and quiet space to reset. Small group, gentle pace, deep restoration.",
+                EventType = "retreat",
+                Lens = WithinLens.Seek,
+                LocationName = "Margaret River Forest Lodge",
+                IsOnline = false,
+                StartUtc = now.AddDays(21).AddHours(7),
+                EndUtc = now.AddDays(23).AddHours(11),
+                PriceAmount = 890,
+                Currency = "AUD",
+                Capacity = 16,
+                SignupType = SignupType.Internal,
+                ImageUrl = "https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=1200&q=80",
+                Status = EventStatus.Published,
+                Tags = ["retreat", "meditation", "yoga", "nature"],
+                RetreatDuration = "3 days / 2 nights",
+                AccommodationIncluded = true,
+                MealsIncluded = true,
+                TransportIncluded = false,
+                RetreatFocus = "meditation",
+                DifficultyLevel = "all_levels",
+                WhatsIncluded = "Two nights twin-share accommodation, all plant-based meals, daily guided meditation and yoga, a forest sound bath, and take-home practice journal.",
+                WhatToBring = "Comfortable layers, a refillable water bottle, walking shoes, and an open mind. Yoga mats and props are provided.",
+                FacilitiesAvailable = ["parking", "showers", "wifi", "vegan_meals", "vegetarian_meals", "shared_rooms", "first_aid"],
+                CreatedUtc = now
             }
         };
 
@@ -527,6 +558,7 @@ public static class WithinSeedData
         existing.ProviderId = seed.ProviderId;
         existing.Title = seed.Title;
         existing.Description = seed.Description;
+        existing.EventType = seed.EventType;
         existing.Lens = seed.Lens;
         existing.LocationName = seed.LocationName;
         existing.IsOnline = seed.IsOnline;
@@ -540,6 +572,15 @@ public static class WithinSeedData
         existing.ImageUrl = seed.ImageUrl;
         existing.Status = seed.Status;
         existing.Tags = seed.Tags;
+        existing.RetreatDuration = seed.RetreatDuration;
+        existing.AccommodationIncluded = seed.AccommodationIncluded;
+        existing.MealsIncluded = seed.MealsIncluded;
+        existing.TransportIncluded = seed.TransportIncluded;
+        existing.RetreatFocus = seed.RetreatFocus;
+        existing.DifficultyLevel = seed.DifficultyLevel;
+        existing.WhatsIncluded = seed.WhatsIncluded;
+        existing.WhatToBring = seed.WhatToBring;
+        existing.FacilitiesAvailable = seed.FacilitiesAvailable;
     }
 
     private static async Task UpsertCommunity(WithinDbContext db, Community seed)

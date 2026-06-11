@@ -525,6 +525,7 @@ public sealed class Event
     public string Title { get; set; } = "";
     public string Description { get; set; } = "";
     public WithinLens Lens { get; set; }
+    public string EventType { get; set; } = "class";
     public string LocationName { get; set; } = "";
     public bool IsOnline { get; set; }
     public DateTimeOffset StartUtc { get; set; }
@@ -551,6 +552,16 @@ public sealed class Event
     public string? FoodNotes { get; set; }
     public string? AgeRestriction { get; set; }
     public string? SafetyNotes { get; set; }
+    // Retreat-specific fields. Only populated when EventType == "retreat"; null/empty otherwise.
+    public string? RetreatDuration { get; set; }
+    public bool AccommodationIncluded { get; set; }
+    public bool MealsIncluded { get; set; }
+    public bool TransportIncluded { get; set; }
+    public string? RetreatFocus { get; set; }
+    public string? DifficultyLevel { get; set; }
+    public string? WhatsIncluded { get; set; }
+    public string? WhatToBring { get; set; }
+    public string[] FacilitiesAvailable { get; set; } = [];
     public DateTimeOffset CreatedUtc { get; set; }
 }
 

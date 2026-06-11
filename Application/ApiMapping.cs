@@ -25,6 +25,57 @@ public static class ApiMapping
         "family_kids_friendly"
     };
 
+    public const string RetreatEventType = "retreat";
+    private const string DefaultEventType = "class";
+    private static readonly HashSet<string> EventTypeOptions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "class",
+        "workshop",
+        "meetup",
+        "meditation",
+        "yoga",
+        "fitness",
+        "sound_healing",
+        "hiking",
+        "retreat",
+        "festival",
+        "other"
+    };
+    private static readonly HashSet<string> RetreatFocusOptions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "meditation",
+        "yoga",
+        "spiritual",
+        "wellness",
+        "fitness",
+        "detox",
+        "mens_retreat",
+        "womens_retreat",
+        "corporate_wellness",
+        "nature",
+        "mindfulness"
+    };
+    private static readonly HashSet<string> DifficultyLevelOptions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "beginner",
+        "intermediate",
+        "advanced",
+        "all_levels"
+    };
+    private static readonly HashSet<string> FacilitiesAvailableOptions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "parking",
+        "wheelchair_access",
+        "showers",
+        "wifi",
+        "vegan_meals",
+        "vegetarian_meals",
+        "private_rooms",
+        "shared_rooms",
+        "accessible_toilets",
+        "first_aid"
+    };
+
     public static Guid UserId(this ClaimsPrincipal principal) =>
         Guid.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new InvalidOperationException("User id claim missing."));
 
@@ -258,6 +309,7 @@ public static class ApiMapping
     {
         evt.Title = request.Title.Trim();
         evt.Description = request.Description.Trim();
+        evt.EventType = NormalizeEventType(request.EventType);
         evt.Lens = request.Lens;
         evt.ProviderServiceId = request.ProviderServiceId;
         evt.LocationName = request.LocationName.Trim();
@@ -285,7 +337,39 @@ public static class ApiMapping
         evt.FoodNotes = NormalizeNullable(request.FoodNotes);
         evt.AgeRestriction = NormalizeSingle(request.AgeRestriction);
         evt.SafetyNotes = NormalizeNullable(request.SafetyNotes);
+
+        // Retreat-specific fields only persist for retreats; other event types stay clean.
+        if (evt.EventType == RetreatEventType)
+        {
+            evt.RetreatDuration = NormalizeNullable(request.RetreatDuration);
+            evt.AccommodationIncluded = request.AccommodationIncluded;
+            evt.MealsIncluded = request.MealsIncluded;
+            evt.TransportIncluded = request.TransportIncluded;
+            evt.RetreatFocus = NormalizeSingle(request.RetreatFocus);
+            evt.DifficultyLevel = NormalizeSingle(request.DifficultyLevel);
+            evt.WhatsIncluded = NormalizeNullable(request.WhatsIncluded);
+            evt.WhatToBring = NormalizeNullable(request.WhatToBring);
+            evt.FacilitiesAvailable = NormalizeList(request.FacilitiesAvailable);
+        }
+        else
+        {
+            evt.RetreatDuration = null;
+            evt.AccommodationIncluded = false;
+            evt.MealsIncluded = false;
+            evt.TransportIncluded = false;
+            evt.RetreatFocus = null;
+            evt.DifficultyLevel = null;
+            evt.WhatsIncluded = null;
+            evt.WhatToBring = null;
+            evt.FacilitiesAvailable = [];
+        }
         return evt;
+    }
+
+    private static string NormalizeEventType(string? value)
+    {
+        var normalized = NormalizeSingle(value);
+        return normalized is not null && EventTypeOptions.Contains(normalized) ? normalized : DefaultEventType;
     }
 
     public static bool TryValidate(this UpsertEventDto request, out string message)
@@ -314,9 +398,53 @@ public static class ApiMapping
             return false;
         }
 
+        var normalizedEventType = NormalizeSingle(request.EventType);
+        if (normalizedEventType is not null && !EventTypeOptions.Contains(normalizedEventType))
+        {
+            message = "Event type is not a supported option.";
+            return false;
+        }
+
+        if (!IsAllowed(request.RetreatFocus, RetreatFocusOptions))
+        {
+            message = "Retreat focus is not a supported option.";
+            return false;
+        }
+
+        if (!IsAllowed(request.DifficultyLevel, DifficultyLevelOptions))
+        {
+            message = "Difficulty level is not a supported option.";
+            return false;
+        }
+
+        if (!IsListAllowed(request.FacilitiesAvailable, FacilitiesAvailableOptions))
+        {
+            message = "Facilities available contains an unsupported option.";
+            return false;
+        }
+
+        // Retreats require their core descriptive fields so the experience stays premium.
+        if (normalizedEventType == RetreatEventType)
+        {
+            if (IsBlank(request.RetreatDuration)
+                || NormalizeSingle(request.RetreatFocus) is null
+                || NormalizeSingle(request.DifficultyLevel) is null
+                || IsBlank(request.WhatsIncluded)
+                || IsBlank(request.WhatToBring))
+            {
+                message = "Retreats need a duration, focus, difficulty level, what's included, and what to bring.";
+                return false;
+            }
+        }
+
         message = "";
         return true;
     }
+
+    private static bool IsBlank(string? value) => string.IsNullOrWhiteSpace(value);
+
+    private static bool IsListAllowed(string[]? values, HashSet<string> allowed) =>
+        values is null || values.All(value => IsAllowed(value, allowed));
 
     public static decimal Average(DailyCheckIn[] items, Func<DailyCheckIn, int> selector) =>
         Math.Round(items.Average(item => (decimal)selector(item)), 1, MidpointRounding.AwayFromZero);
@@ -357,6 +485,7 @@ public static class ApiMapping
                     providerService.UpdatedUtc),
             evt.Title,
             evt.Description,
+            evt.EventType == "" ? "class" : evt.EventType,
             evt.Lens,
             evt.LocationName,
             evt.IsOnline,
@@ -387,7 +516,16 @@ public static class ApiMapping
             evt.DietaryOptions,
             evt.FoodNotes,
             evt.AgeRestriction,
-            evt.SafetyNotes);
+            evt.SafetyNotes,
+            evt.RetreatDuration,
+            evt.AccommodationIncluded,
+            evt.MealsIncluded,
+            evt.TransportIncluded,
+            evt.RetreatFocus,
+            evt.DifficultyLevel,
+            evt.WhatsIncluded,
+            evt.WhatToBring,
+            evt.FacilitiesAvailable);
 
     public static IQueryable<CommunityDto> ProjectCommunities(IQueryable<Community> query, WithinDbContext db, Guid? userId) =>
         query.Select(item => new CommunityDto(

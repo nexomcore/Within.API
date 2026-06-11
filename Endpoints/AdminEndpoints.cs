@@ -70,6 +70,29 @@ public static class AdminEndpoints
             };
         }).RequireAuthorization("AdminOnly");
 
+        // Permanently purge an already-deleted (tombstone) account and every remaining reference.
+        admin.MapDelete("/users/{id:guid}/purge", async (Guid id, WithinDbContext db, AccountDeletionService deletion) =>
+        {
+            var user = await db.Users.FirstOrDefaultAsync(item => item.Id == id);
+            if (user is null) return Results.NotFound();
+            if (user.Role == WithinRole.Admin)
+            {
+                var activeAdmins = await db.Users.CountAsync(item => item.Role == WithinRole.Admin && !item.IsDeleted);
+                if (activeAdmins <= 1)
+                {
+                    return Results.Json(new { message = "Cannot purge the last remaining admin account." }, statusCode: StatusCodes.Status409Conflict);
+                }
+            }
+
+            var result = await deletion.HardDeleteAccountAsync(id);
+            return result.Status switch
+            {
+                AccountDeletionStatus.Deleted => Results.NoContent(),
+                AccountDeletionStatus.Blocked => Results.Json(new { message = result.Message }, statusCode: StatusCodes.Status409Conflict),
+                _ => Results.NotFound()
+            };
+        }).RequireAuthorization("AdminOnly");
+
         return app;
     }
 }
